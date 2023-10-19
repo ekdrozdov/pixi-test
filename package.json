@@ -1,0 +1,18 @@
+{
+  "name": "vue3-typescript-vite-pixijs",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite --mode localhost",
+    "build": "vue-tsc --noEmit && vite build --mode production",
+    "preview": "vite preview --mode localhost"
+  },
+  "dependencies": {
+    "@pixi/utils": "7.3.1",
+    "pixi.js": "^7.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.7.15",
+    "typescript": "^4.6.4",
+    "vite": "^3.1.0"
+  }
+}
