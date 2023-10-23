@@ -11,6 +11,6 @@ export interface World {
 export class WorldBase implements World {
   height: number = 100
   width: number = 100
-  scene: Scene = new SceneBase()
+  scene: Scene = new SceneBase(this)
   clock: GameClock = new GameClockBase()
 }

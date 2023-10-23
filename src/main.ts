@@ -1,26 +1,25 @@
-import { Game, GameOverPixi } from './game/game'
+import { Bunny } from './game/agent'
+import { WorldBase } from './game/world'
+import { PixiRenderer } from './renderer/pixi/app'
 
-const game: Game = new GameOverPixi()
-game.init()
+const world = new WorldBase()
+const renderer = new PixiRenderer()
+renderer.render(world)
+const bunny = new Bunny()
+bunny.renderable.position = { x: world.width / 2, y: world.height / 2 }
+world.scene.mount(bunny)
+world.clock.setFreq(20)
+world.clock.resume()
 
-// const app = new PIXI.Application({
-//   background: '#1099bb',
-//   resizeTo: window,
+// clock.on('tick', () => {
+//   basicText.text = `days: ${clock.days}, hours: ${clock.hours}, minutes: ${clock.minutes}`
 // })
-// document.body.appendChild(app.view as any)
-
-// const viewport = new Viewport({
-//   screenWidth: window.innerWidth,
-//   screenHeight: window.innerHeight,
-//   worldWidth: 1000,
-//   worldHeight: 1000,
-//   events: app.renderer.events,
+// clock.on('tick', () => {
+//   scene.all<AnimalAgent>(AnimalAgentBase).forEach((agent) => {
+//     ai(agent)
+//     agent.controller.execute()
+//   })
 // })
-// app.stage.addChild(viewport as any)
-// viewport.drag().pinch().wheel().decelerate()
-
-// const clock = new GameClockBase()
-// const scene = new PixiScene(viewport, clock)
 
 // const spawnAction = new Spawn(scene)
 // viewport.addListener('clicked', (e) => {

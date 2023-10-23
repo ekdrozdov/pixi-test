@@ -22,7 +22,7 @@ export interface GameClock extends Event<GameClockEvents> {
   readonly days: number
   readonly hours: number
   readonly minutes: number
-  go(): void
+  resume(): void
   pause(): void
   /**
    * Sets how many times per second tick happens.
@@ -47,7 +47,7 @@ export class GameClockBase
     this.setFreq(1)
   }
 
-  go(): void {
+  resume(): void {
     this._isRunning = true
   }
 

@@ -1,12 +1,13 @@
-import { Agent, SceneObject } from '../game/agent'
-import { Point } from '../game/renderable'
+import { Renderable } from '../game/agent'
+import { SceneObject } from '../game/sceneObject'
+import { Point } from '../renderer/renderable'
 import { Scene } from '../game/scene'
 
 export class Spawn {
   constructor(private readonly _scene: Scene) {}
-  execute(agent: Agent, position: Point) {
-    this._scene.add(agent)
-    agent.object.renderable.x = position.x
-    agent.object.renderable.y = position.y
+  execute(agent: Renderable, position: Point) {
+    this._scene.mount(agent)
+    agent.object.position.x = position.x
+    agent.object.position.y = position.y
   }
 }

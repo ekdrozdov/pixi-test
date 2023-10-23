@@ -1,25 +1,16 @@
-import {
-  Controller,
-  AnimalControllerBase as ControllerBase,
-  AnimalController,
-  AnimalControllerBase,
-} from './controller'
-import { Renderable, RenderableImpl as RenderableBase } from './renderable'
-
-export interface SceneObject {
-  readonly renderable: Renderable
-  readonly id: number
-}
-
-export interface Agent {
-  readonly controller: Controller
-  readonly object: SceneObject
-}
+import { fit } from '../utils/math'
+import { Point } from '../renderer/renderable'
+import { SceneObject, SceneObjectBase } from './scene'
+import { World } from './world'
 
 export interface BiologicalModel {
   health: number
   readonly age: number
   readonly isAlive: boolean
+}
+
+export interface Biological extends BiologicalModel {
+  die(): void
 }
 
 export interface AnimalModel extends BiologicalModel {
@@ -29,72 +20,58 @@ export interface AnimalModel extends BiologicalModel {
   readonly speed: number
 }
 
-export interface Biological extends BiologicalModel {
-  onHour(): void
-  die(): void
+export interface Plant extends SceneObject, BiologicalModel {}
+
+export interface Animal extends SceneObject, Biological, AnimalModel {
+  moveTo(point: Point): void
 }
 
-export interface PlantAgent extends Agent, BiologicalModel {}
-
-export interface AnimalAgent extends Agent, Biological, AnimalModel {
-  controller: AnimalController
-}
-
-export class SceneObjectBase implements SceneObject {
-  private static _objectsCounter = 0
-  renderable: Renderable
-  readonly id: number
-  constructor(kind: string) {
-    this.renderable = new RenderableBase(kind)
-    this.id = SceneObjectBase._objectsCounter++
-  }
-}
-
-export class BiologicalBase implements Biological {
+export class BiologicalBase extends SceneObjectBase implements Biological {
   health: number
   age: number = 0
   isAlive = true
   private _hours = 0
   constructor(model?: Partial<BiologicalModel>) {
+    super()
     this.health = model?.health ?? 100
     this.age = model?.age ?? 0
-  }
-  onHour(): void {
-    if (!this.isAlive) return
-    this._hours++
-    if (this._hours % 8_760 === 0) this.age++
   }
   die(): void {
     this.isAlive = false
   }
-}
-
-export class Plant extends BiologicalBase implements PlantAgent {
-  controller: Controller
-  object: SceneObject
-  constructor(kind: string, model?: Partial<BiologicalModel>) {
-    super(model)
-    this.controller = { execute: () => {}, isBusy: false }
-    this.object = new SceneObjectBase(kind)
+  override onMount(world: World): void {
+    super.onMount(world)
+    this.register(
+      world.clock.on('hour', () => {
+        if (!this.isAlive) return
+        this._hours++
+        if (this._hours % 8_760 === 0) this.age++
+      })
+    )
   }
 }
 
-export class AnimalAgentBase extends BiologicalBase implements AnimalAgent {
-  controller: AnimalController
+export class _Plant extends BiologicalBase implements Plant {
+  object: SceneObject
+  constructor(model?: Partial<BiologicalModel>) {
+    super(model)
+    this.object = new SceneObjectBase()
+  }
+}
+
+export class AnimalAgentBase extends BiologicalBase implements Animal {
   object: SceneObject
   rest: number
   food: number
   breeding: number
   speed: number
 
-  constructor(
-    kind: string,
-    controller: AnimalController,
-    model?: Partial<AnimalModel>
-  ) {
+  private _moveTarget?: Point
+  private isBusy = false
+
+  constructor(model?: Partial<AnimalModel>) {
     super(model)
-    this.controller = controller
-    this.object = new SceneObjectBase(kind)
+    this.object = new SceneObjectBase()
 
     this.rest = model?.rest ?? 0.5
     this.food = model?.food ?? 0.5
@@ -103,18 +80,63 @@ export class AnimalAgentBase extends BiologicalBase implements AnimalAgent {
     this.speed = model?.speed ?? 5
   }
 
-  override onHour(): void {
-    super.onHour()
-    this.food += 0.1
-    if (this.food >= 1) this.health = this.health - this.food
-    if (this.health <= 0) this.die()
+  moveTo(point: Point): void {
+    this._moveTarget = point
+    this.isBusy = true
+  }
+
+  override onMount(world: World): void {
+    super.onMount(world)
+    this.register(
+      world.clock.on('hour', () => {
+        this.food += 0.1
+        if (this.food >= 1) this.health = this.health - this.food
+        if (this.health <= 0) this.die()
+      })
+    )
+    this.register(
+      // controller
+      world.clock.on('tick', () => {
+        if (!this._moveTarget) return
+        if (!this.isAlive) return
+        const { position } = this.renderable
+        if (!position) return
+        const dx = fit(this._moveTarget.x - position.x, this.speed)
+        const dy = fit(this._moveTarget.y - position.y, this.speed)
+        position.x = position.x + dx
+        position.y = position.y + dy
+        if (
+          position.x === this._moveTarget.x &&
+          position.y === this._moveTarget.y
+        )
+          this.isBusy = false
+      })
+    )
+    this.register(
+      // ai
+      world.clock.on('tick', () => {
+        if (!this.renderable.position) return
+        if (this.isBusy) return
+        const moveChance = 0.05
+        if (Math.random() > moveChance) return
+        const moveBoxLimit = 300
+        const point: Point = {
+          x:
+            Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
+            this.renderable.position.x,
+          y:
+            Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
+            this.renderable.position.y,
+        }
+        this.moveTo(point)
+      })
+    )
   }
 }
 
 export class Bunny extends AnimalAgentBase {
   constructor() {
-    const controller = new AnimalControllerBase()
-    super('https://pixijs.com/assets/bunny.png', controller)
-    controller.setTarget(this)
+    super()
+    this.renderable.kind = 'bunny'
   }
 }
