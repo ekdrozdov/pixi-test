@@ -1,11 +1,10 @@
 import {
-  Renderable,
   Controller,
-  RenderableImpl as RenderableBase,
   AnimalControllerBase as ControllerBase,
   AnimalController,
   AnimalControllerBase,
-} from './game'
+} from './controller'
+import { Renderable, RenderableImpl as RenderableBase } from './renderable'
 
 export interface SceneObject {
   readonly renderable: Renderable

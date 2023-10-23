@@ -1,6 +1,6 @@
-import { Agent, SceneObject } from '../agent'
-import { Point } from '../game'
-import { Scene } from '../scene'
+import { Agent, SceneObject } from '../game/agent'
+import { Point } from '../game/renderable'
+import { Scene } from '../game/scene'
 
 export class Spawn {
   constructor(private readonly _scene: Scene) {}
