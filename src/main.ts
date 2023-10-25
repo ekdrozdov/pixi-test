@@ -2,13 +2,13 @@ import { Bunny } from './game/agent'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 
-const world = new WorldBase()
+const world = new WorldBase({ size: { x: 500, y: 500 } })
 const renderer = new PixiRenderer()
 renderer.render(world)
 const bunny = new Bunny()
-bunny.renderable.position = { x: world.width / 2, y: world.height / 2 }
+bunny.renderable.position = { x: world.size.x / 2, y: world.size.y / 2 }
 world.scene.mount(bunny)
-world.clock.setFreq(20)
+world.clock.setFreq(1)
 world.clock.resume()
 
 // clock.on('tick', () => {

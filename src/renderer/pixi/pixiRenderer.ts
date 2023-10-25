@@ -33,8 +33,8 @@ export class PixiRenderer
     const viewport = new Viewport({
       screenWidth: window.innerWidth,
       screenHeight: window.innerHeight,
-      worldWidth: world.width,
-      worldHeight: world.height,
+      worldWidth: world.size.x,
+      worldHeight: world.size.y,
       events: this._app.renderer.events,
     })
     this._app.stage.addChild(viewport as any)

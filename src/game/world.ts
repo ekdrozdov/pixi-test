@@ -1,16 +1,21 @@
+import { Point } from '../renderer/renderable'
 import { Scene, SceneBase } from './scene'
 import { GameClock, GameClockBase } from './time'
 
 export interface World {
-  readonly height: number
-  readonly width: number
+  readonly size: Point
   readonly scene: Scene
   readonly clock: GameClock
 }
 
 export class WorldBase implements World {
-  height: number = 100
-  width: number = 100
+  size: Point
   scene: Scene = new SceneBase(this)
   clock: GameClock = new GameClockBase()
+  constructor(props?: { size?: Point }) {
+    this.size = props?.size ?? {
+      x: 100,
+      y: 100,
+    }
+  }
 }

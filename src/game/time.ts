@@ -58,7 +58,7 @@ export class GameClockBase
     clearInterval(this._intervalId)
     if (value === 0) return
     this._intervalId = setInterval(() => {
-      this._isRunning && this.dispatch('tick', undefined), 1000 / value
+      this._isRunning && this.dispatch('tick', undefined)
 
       this.minutes = ++this.minutes % 60
       if (this.minutes !== 0) return
@@ -70,6 +70,6 @@ export class GameClockBase
       this.days = ++this.days % 30
       if (this.days !== 0) return
       this.years = ++this.years % 365
-    })
+    }, 1000 / value)
   }
 }
