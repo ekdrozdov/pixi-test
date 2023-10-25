@@ -1,6 +1,6 @@
 import { Bunny } from './game/agent'
 import { WorldBase } from './game/world'
-import { PixiRenderer } from './renderer/pixi/app'
+import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 
 const world = new WorldBase()
 const renderer = new PixiRenderer()

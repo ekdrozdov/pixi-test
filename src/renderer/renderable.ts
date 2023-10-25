@@ -3,6 +3,8 @@ export interface Point {
   y: number
 }
 
+export type RenderableState = 'default' | 'dead'
+
 export type RenderableKind = 'bunny'
 
 /**
@@ -10,5 +12,6 @@ export type RenderableKind = 'bunny'
  */
 export interface Renderable {
   kind: RenderableKind
+  state: RenderableState
   position: Point
 }

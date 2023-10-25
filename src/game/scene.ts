@@ -34,7 +34,7 @@ export class SceneObjectBase extends DisposableStorage implements SceneObject {
     // Noop.
   }
   onDismount(): void {
-    // Noop.
+    this.dispose()
   }
 }
 

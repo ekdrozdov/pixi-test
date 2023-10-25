@@ -3,8 +3,11 @@ import { Point } from '../renderer/renderable'
 import { SceneObject, SceneObjectBase } from './scene'
 import { World } from './world'
 
+type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating'
+
 export interface BiologicalModel {
   health: number
+  state: BiologicalState
   readonly age: number
   readonly isAlive: boolean
 }
@@ -30,7 +33,10 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
   health: number
   age: number = 0
   isAlive = true
+  state: BiologicalState = 'idle'
   private _hours = 0
+  private _world!: World
+  private _dissipationHoursLeft = 10
   constructor(model?: Partial<BiologicalModel>) {
     super()
     this.health = model?.health ?? 100
@@ -38,12 +44,18 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
   }
   die(): void {
     this.isAlive = false
+    this.renderable.state = 'dead'
   }
   override onMount(world: World): void {
+    this._world = world
     super.onMount(world)
     this.register(
       world.clock.on('hour', () => {
-        if (!this.isAlive) return
+        if (!this.isAlive) {
+          if (--this._dissipationHoursLeft === 0) {
+            this._world.scene.dismount(this)
+          }
+        }
         this._hours++
         if (this._hours % 8_760 === 0) this.age++
       })
@@ -88,14 +100,16 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
   override onMount(world: World): void {
     super.onMount(world)
     this.register(
+      // biology
       world.clock.on('hour', () => {
-        this.food += 0.1
-        if (this.food >= 1) this.health = this.health - this.food
+        this.food -= 0.03
+        this.rest -= 0.05
+        if (this.food <= 0) this.health = this.health + this.food
         if (this.health <= 0) this.die()
       })
     )
     this.register(
-      // controller
+      // movement executor
       world.clock.on('tick', () => {
         if (!this._moveTarget) return
         if (!this.isAlive) return
@@ -113,7 +127,7 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
       })
     )
     this.register(
-      // ai
+      // random movement ai executor
       world.clock.on('tick', () => {
         if (!this.renderable.position) return
         if (this.isBusy) return
@@ -131,12 +145,15 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         this.moveTo(point)
       })
     )
+    this.register(world.clock.on('tick', () => {}))
   }
 }
 
 export class Bunny extends AnimalAgentBase {
   constructor() {
-    super()
+    super({
+      health: 10,
+    })
     this.renderable.kind = 'bunny'
   }
 }

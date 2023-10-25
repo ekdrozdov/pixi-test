@@ -60,6 +60,9 @@ export class PixiRenderer
           dObj.x = renderable.position.x
           dObj.y = renderable.position.y
         }
+        if (renderable.state) {
+          if (renderable.state === 'dead') dObj.rotation = 90
+        }
       }
     }
 
