@@ -137,27 +137,80 @@ class RawMeatRecipe implements Recipe {
  * or maybe add a pending tasks, whenever a task is done, check pending (a-la 'depending' or 'blocked')
  */
 
-interface Reward {}
+interface Reward {
+  kind: 'reward'
+  claim(worker: Worker): void
+}
 
 export interface Task {
-  execute(): Task | Reward
-  createChildren(): void
+  kind: 'task'
+  execute(): TaskResult
+  // createChildren(): void
 }
 
-class TaskC implements Task {
-  private reqs: Task[] = []
-  constructor(private worker: Worker, private children: Task[]) {}
-  supply(req: Task) {
-    this.reqs.push(req)
-    this.worker.schedule(this)
+type TaskResult = Reward | Task
+
+/**
+ * constructed task tree
+ * start execution
+ *  schedule leaves (=nodes with no children)
+ *  when node's task is done, supply reward to the parent node
+ *  when all deps are sullpied, schedule task
+ */
+
+class TaskNode implements Task {
+  kind: 'task' = 'task'
+  children?: TaskNode[]
+  // Don't care about actual reward, just count them.
+  deps?: number
+  parent?: TaskNode
+  worker?: Worker
+  constructor(private task: Task) {}
+  loadSubtree(worker: Worker) {
+    if (!this.children) {
+      worker.schedule(this)
+      return
+    }
+    this.worker = worker
+    this.children.forEach((child) => child.loadSubtree(worker))
   }
-  execute(): Task | Reward {
-    throw new Error('Method not implemented.')
+  supply(requirement: Reward) {
+    if (!this.deps) throw new Error('Unexpected supply')
+    this.deps--
+    if (this.deps < 0) throw new Error('Deps counter is corrupted')
+    if (this.deps === 0) {
+      if (!this.worker) throw new Error('Worker is missing')
+      this.worker.schedule(this.task)
+    }
   }
-  createChildren() {
-    this.children.forEach((child) => child.createChildren())
+  addChild(node: TaskNode) {
+    node.parent = this
+    if (!this.children) this.children = []
+    this.children.push(node)
+  }
+  execute(): TaskResult {
+    const result = this.task.execute()
+    if (result.kind === 'task') return result
+    return this.parent
+      ? {
+          kind: 'reward',
+          claim: () => {
+            this.parent?.supply(result)
+          },
+        }
+      : result
   }
 }
+
+class MeatRecipe {
+  tree: TaskNode
+  constructor() {
+    this.tree = new TaskNode(/*  */)
+    this.tree.addChild(new TaskNode(/* has weapon */))
+  }
+}
+
+class SpearRecipe {}
 
 class RecipeNode {
   private deps: RecipeNode[]
