@@ -205,10 +205,70 @@ class TaskNode implements Task {
 class MeatRecipe {
   tree: TaskNode
   constructor() {
+    /**
+     * OR hunt
+     *  own weapon
+     *    OR craft weapon
+     *    OR order weapon
+     *  go to hunting spot
+     *  work (consider yield)
+     * OR slaughter
+     *  own cattle farm
+     *    order cattle farm
+     *  work (consider yield)
+     */
     this.tree = new TaskNode(/*  */)
     this.tree.addChild(new TaskNode(/* has weapon */))
   }
 }
+
+/**
+ * animal recipe
+ *  own a tool
+ *  go to a spot
+ *  work
+ */
+
+/**
+ * skin recipe
+ *  own an animal
+ *  own a tool
+ *  work (+meat)
+ */
+
+/**
+ * meat recipe
+ *  own an animal
+ *  own a tool
+ *  work
+ */
+
+/**
+ * hide recipe
+ *  own a station
+ *  own a tool
+ *  own a skin
+ *  go to the station
+ *  work
+ */
+
+/**
+ * cloth recipe
+ *  own a station
+ *  own a tool
+ *  own a materials
+ *    OR hide
+ *    OR textile
+ *  go to the station
+ *  work
+ */
+
+/**
+ * house recipe
+ *  own materials for house kind
+ *  go to spot
+ *
+ */
 
 class SpearRecipe {}
 
