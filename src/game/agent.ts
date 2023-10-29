@@ -125,8 +125,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
 
   override onMount(world: World): void {
     super.onMount(world)
+    // biology executor
     this.register(
-      // biology executor
       world.clock.on('hour', () => {
         this.breeding -= 0.005
 
@@ -154,8 +154,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         if (this.health <= 0) this.die()
       })
     )
+    // movement executor
     this.register(
-      // movement executor
       world.clock.on('tick', () => {
         if (!this._moveTarget) return
         if (!this.isAlive) return
@@ -172,8 +172,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
           this.isBusy = false
       })
     )
+    // random movement ai executor
     this.register(
-      // random movement ai executor
       world.clock.on('tick', () => {
         if (this.state !== 'idle') return
         if (!this.renderable.position) return
@@ -192,8 +192,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         this.move(point)
       })
     )
+    // generic bio ai executor
     this.register(
-      // generic bio ai executor
       world.clock.on('tick', () => {
         if (this.state === 'sleeping') return
         // sleep
