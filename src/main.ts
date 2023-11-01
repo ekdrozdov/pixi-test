@@ -8,7 +8,7 @@ renderer.render(world)
 const bunny = new Bunny()
 bunny.renderable.position = { x: world.size.x / 2, y: world.size.y / 2 }
 world.scene.mount(bunny)
-world.clock.setFreq(1)
+world.clock.setFreq(60)
 world.clock.resume()
 
 // clock.on('tick', () => {

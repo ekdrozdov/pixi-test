@@ -1,7 +1,14 @@
-import { fit } from '../utils/math'
+import { crop } from '../utils/math'
 import { Point } from '../renderer/renderable'
 import { SceneObject, SceneObjectBase } from './scene'
 import { World } from './world'
+import {
+  GoodsContainerBase,
+  RECIPES,
+  Task,
+  Worker,
+  loadTaskTree,
+} from './goods-production/recieps'
 
 type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating'
 
@@ -17,10 +24,6 @@ export interface Biological extends BiologicalModel {
 }
 
 export interface AnimalModel extends BiologicalModel {
-  // need: state, update and fulfill behavior; adds a state and transition
-  readonly rest: number
-  readonly food: number
-  readonly breeding: number
   readonly speed: number
 }
 
@@ -29,8 +32,6 @@ export interface Plant extends SceneObject, BiologicalModel {}
 export interface Animal extends SceneObject, Biological, AnimalModel {
   move(point: Point): void
   sleep(): void
-  eat(target: Plant): void
-  breed(target: never): void
 }
 
 export class BiologicalBase extends SceneObjectBase implements Biological {
@@ -75,47 +76,22 @@ export class Bush extends BiologicalBase implements Plant {
   }
 }
 
-function isReachable(source: Point, target: Point) {
-  const eps = 4
-  return distance(source, target) < eps
-}
-
-function distance(source: Point, target: Point) {
-  return Math.abs(source.x - target.x) + Math.abs(source.y - target.y)
-}
-
 export class AnimalAgentBase extends BiologicalBase implements Animal {
   object: SceneObject
-  rest: number
-  food: number
-  breeding: number
   speed: number
 
   private _moveTarget?: Point
   private isBusy = false
+  private tasks: Task[] = []
 
   constructor(model?: Partial<AnimalModel>) {
     super(model)
     this.object = new SceneObjectBase()
-
-    this.rest = model?.rest ?? 0.5
-    this.food = model?.food ?? 0.5
-    this.breeding = model?.breeding ?? 1
-
     this.speed = model?.speed ?? 5
   }
 
   sleep(): void {
     this.state = 'sleeping'
-  }
-
-  eat(target: Plant): void {
-    this.state = 'eating'
-    // rm target
-  }
-
-  breed(target: Bunny): void {
-    // if (target.)
   }
 
   move(point: Point): void {
@@ -125,35 +101,6 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
 
   override onMount(world: World): void {
     super.onMount(world)
-    // biology executor
-    this.register(
-      world.clock.on('hour', () => {
-        this.breeding -= 0.005
-
-        // eating state
-        if (this.state === 'eating') {
-          this.food = 1
-          this.state = 'idle'
-        } else {
-          this.food -= 0.03
-        }
-        if (this.food <= 0) this.health = this.health + this.food
-
-        // sleep state
-        if (this.state === 'sleeping') {
-          // awake
-          if (this.rest >= 1) this.state = 'idle'
-          // better sleep at night?
-          this.rest += 0.125
-        } else {
-          this.rest -= 0.05
-          if (this.rest <= 0) this.health = this.health + this.rest
-        }
-
-        // health
-        if (this.health <= 0) this.die()
-      })
-    )
     // movement executor
     this.register(
       world.clock.on('tick', () => {
@@ -161,8 +108,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         if (!this.isAlive) return
         const { position } = this.renderable
         if (!position) return
-        const dx = fit(this._moveTarget.x - position.x, this.speed)
-        const dy = fit(this._moveTarget.y - position.y, this.speed)
+        const dx = crop(this._moveTarget.x - position.x, this.speed)
+        const dy = crop(this._moveTarget.y - position.y, this.speed)
         position.x = position.x + dx
         position.y = position.y + dy
         if (
@@ -192,48 +139,34 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         this.move(point)
       })
     )
-    // generic bio ai executor
-    this.register(
-      world.clock.on('tick', () => {
-        if (this.state === 'sleeping') return
-        // sleep
-        if (this.rest <= 0.2) {
-          this.sleep()
-          return
-        }
-        // feed
-        if (this.food <= 0.5) {
-          const candidates = this._world.scene.all<Bush>(Bush)
-          if (candidates.length === 0) return
-          const target = candidates
-            .map((candidate) => ({
-              dist: distance(
-                this.renderable.position!,
-                candidate.renderable.position!
-              ),
-              obj: candidate,
-            }))
-            .sort(({ dist }, { dist: dist2 }) => dist - dist2)[0]
-          if (
-            !isReachable(
-              this.renderable.position!,
-              target.obj.renderable.position!
-            )
-          ) {
-            this.move(target.obj.renderable.position!)
-          } else {
-            this.eat(target.obj)
-          }
 
-          // search for a target
-        }
-        // breed
-        if (this.breeding <= 0) {
-          // const candidates = this._world.scene.all<Bunny>(Bunny)
-          // search for a target
-        }
-      })
-    )
+    const poll = () => {
+      const task = this.tasks.shift()
+      if (task !== undefined) {
+        const result = task.execute(worker)
+        return
+      }
+      const targetRecipe = RECIPES['skin']
+      loadTaskTree(targetRecipe, worker).schedule(worker)
+      poll()
+    }
+    const worker: Worker = {
+      clock: this._world.clock,
+      inventory: new GoodsContainerBase(),
+      schedule: (task) => {
+        this.tasks.push(task)
+        // console.log(
+        //   `task queue: ${JSON.stringify(
+        //     this.tasks.map((task) => (task as any).task.reward)
+        //   )}`
+        // )
+        console.log(JSON.stringify(this.tasks.length))
+      },
+      yield: () => poll(),
+    }
+    poll()
+    // working state executor
+    // this.register(world.clock.on('hour', () => poll()))
   }
 }
 

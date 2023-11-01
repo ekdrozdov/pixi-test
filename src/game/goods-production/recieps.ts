@@ -1,76 +1,129 @@
-type GoodTag = 'weapon' | 'raw-meat' | 'animal' | 'skin'
+import { Disposable } from '../../utils/lifecycle'
+import { GameClock } from '../time'
 
-interface Good {
-  readonly tag: GoodTag
-  readonly quality: number
+interface GoodsContainer {
+  store(good: Good): void
+  unstore(good: Good): Good
 }
 
-interface Reward {
-  kind: 'reward'
-  claim(worker: Worker): void
+export class GoodsContainerBase implements GoodsContainer {
+  private readonly goods = new Map<GoodTag, { amount: number }>()
+  store(good: Good): void {
+    let stored = this.goods.get(good.tag)
+    if (!stored) {
+      stored = { amount: 0 }
+      this.goods.set(good.tag, stored)
+    }
+    stored.amount += good.amount
+    for (const [tag, { amount }] of this.goods.entries()) {
+      console.log(`${tag}: ${amount}`)
+    }
+  }
+  unstore(request: Good): Good {
+    let stored = this.goods.get(request.tag)
+    if (!stored) throw new Error('Missing stored')
+    if (stored.amount < request.amount) throw new Error('Not sufficient amount')
+    stored.amount -= request.amount
+    return request
+  }
+}
+
+export interface Worker {
+  readonly inventory: GoodsContainer
+  readonly clock: GameClock
+  schedule(task: Task): void
+  yield(): void
 }
 
 export interface Task {
-  kind: 'task'
-  execute(): TaskResult
-  // createChildren(): void
+  /**
+   * Encapsulates behavior.
+   */
+  execute(worker: Worker): void
+  pause(): void
 }
 
-type TaskResult = Reward | Task
-
-/**
- * constructed task tree
- * start execution
- *  schedule leaves (=nodes with no children)
- *  when node's task is done, supply reward to the parent node
- *  when all deps are sullpied, schedule task
- */
-
 class TaskNode implements Task {
-  kind: 'task' = 'task'
-  children?: TaskNode[]
-  // Don't care about actual reward, just count them.
-  deps?: number
+  private children?: TaskNode[]
   parent?: TaskNode
-  worker?: Worker
-  constructor(private task: Task) {}
-  loadSubtree(worker: Worker) {
+  debt?: Good
+  constructor(
+    private readonly task: Task,
+    private readonly worker: Worker,
+    private readonly reqs: Good[]
+  ) {}
+
+  schedule(worker: Worker) {
     if (!this.children) {
       worker.schedule(this)
       return
     }
-    this.worker = worker
-    this.children.forEach((child) => child.loadSubtree(worker))
+    this.children.forEach((child) => child.schedule(worker))
   }
-  supply(requirement: Reward) {
-    if (!this.deps) throw new Error('Unexpected supply')
-    this.deps--
-    if (this.deps < 0) throw new Error('Deps counter is corrupted')
-    if (this.deps === 0) {
-      if (!this.worker) throw new Error('Worker is missing')
+
+  pause(): void {
+    this.task.pause()
+  }
+
+  supply(good: Good) {
+    this.reqs.splice(0, 1)
+    if (this.reqs.length === 0) {
       this.worker.schedule(this.task)
     }
   }
+
   addChild(node: TaskNode) {
-    node.parent = this
     if (!this.children) this.children = []
     this.children.push(node)
   }
-  execute(): TaskResult {
-    const result = this.task.execute()
-    if (result.kind === 'task') return result
-    return this.parent
-      ? {
-          kind: 'reward',
-          claim: () => {
-            this.parent?.supply(result)
-          },
+
+  execute(): void {
+    this.task.execute({
+      inventory: this.worker.inventory,
+      clock: this.worker.clock,
+      schedule: (task: Task) => {
+        this.worker.schedule(task)
+      },
+      yield: () => {
+        if (!this.parent) {
+          this.worker.yield()
+          return
         }
-      : result
+        if (!this.debt) throw new Error('Missing debt')
+        const good = this.worker.inventory.unstore(this.debt)
+        if (good.amount < this.debt.amount) throw new Error('Missing goods')
+        this.parent.supply(good)
+        this.worker.yield()
+      },
+    })
   }
 }
 
-interface ComponentOptions {
+/**
+ * Go to workplace and work for N hours.
+ */
+class GenericProductionTask implements Task {
+  tracker?: Disposable
+  constructor(private hoursLeft: number, private reward: Good) {
+    if (this.hoursLeft <= 0) throw new RangeError()
+  }
+  execute(worker: Worker): void {
+    this.tracker?.dispose()
+    this.tracker = worker.clock.on('hour', () => {
+      --this.hoursLeft
+      if (this.hoursLeft === 0) {
+        worker.inventory.store(this.reward)
+        worker.yield()
+      }
+    })
+  }
+  pause(): void {
+    this.tracker?.dispose()
+    this.tracker = undefined
+  }
+}
+
+interface Good {
   tag: GoodTag
   amount: number
 }
@@ -81,38 +134,65 @@ export interface RecipeModel {
   readonly yield: number
   /**
    * Component represents a part of the good, like the tip and shaft of the spear.
-   * Each part may be produced using any of suitable materials.
+   * Outer array is a list of components of the target good.
+   * Inner array is a list of suitable materials of a component.
    */
-  readonly components?: ComponentOptions[][]
-  readonly workplace: boolean
-  readonly tools: boolean
+  readonly components?: ReadonlyArray<ReadonlyArray<Good>>
 }
 
-class AnimalRecipe implements RecipeModel {
-  tag: GoodTag = 'animal'
-  manhours = 4
-  yield = 1
-  workplace = true
-  tools = true
+export function loadTaskTree(recipe: RecipeModel, worker: Worker): TaskNode {
+  const reqs = (recipe.components ?? []).map((options) => options[0])
+  const children: TaskNode[] = []
+
+  for (const req of reqs) {
+    const _recipe = RECIPES[req.tag]
+    const reps = Math.ceil(req.amount / _recipe.yield)
+    children.push(...Array(reps).map(() => loadTaskTree(_recipe, worker)))
+  }
+  const task = toTaskNode(recipe, worker, reqs)
+  children.forEach((child, i) => {
+    task.addChild(child)
+    child.parent = task
+    child.debt = reqs[i]
+  })
+  return task
 }
 
-class SkinRecipe implements RecipeModel {
-  tag: GoodTag = 'skin'
-  manhours = 4
-  yield = 2
-  components: ComponentOptions[][] = [[{ tag: 'animal', amount: 1 }]]
-  workplace = false
-  tools = true
+function toTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
+  const task = new GenericProductionTask(recipe.manhours, {
+    tag: recipe.tag,
+    amount: recipe.yield,
+  })
+  return new TaskNode(task, worker, reqs)
 }
 
-class RawMeatRecipe implements RecipeModel {
-  tag: GoodTag = 'raw-meat'
-  manhours: number = 2
-  yield: number = 4
-  components?: ComponentOptions[][] = [[{ tag: 'animal', amount: 1 }]]
-  workplace = false
-  tools = true
-}
+type GoodTag = 'weapon' | 'raw-meat' | 'animal' | 'skin'
+
+export const RECIPES: Record<GoodTag, RecipeModel> = {
+  'raw-meat': {
+    tag: 'raw-meat',
+    manhours: 2,
+    yield: 4,
+    components: [[{ tag: 'animal', amount: 1 }]] as const,
+  },
+  animal: {
+    tag: 'animal',
+    manhours: 4,
+    yield: 1,
+  },
+  skin: {
+    tag: 'skin',
+    manhours: 4,
+    yield: 2,
+    components: [[{ tag: 'animal', amount: 1 }]],
+  },
+  weapon: {
+    // TODO
+    tag: 'weapon',
+    manhours: 1,
+    yield: 1,
+  },
+} as const
 
 /**
  * hide recipe
@@ -140,7 +220,3 @@ class RawMeatRecipe implements RecipeModel {
  *  go to spot
  *
  */
-
-interface Worker {
-  schedule(task: Task): void
-}

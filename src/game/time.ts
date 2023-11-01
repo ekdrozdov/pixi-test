@@ -59,6 +59,7 @@ export class GameClockBase
     if (value === 0) return
     this._intervalId = setInterval(() => {
       this._isRunning && this.dispatch('tick', undefined)
+      console.log(`${this.hours}`)
 
       this.minutes = ++this.minutes % 60
       if (this.minutes !== 0) return
