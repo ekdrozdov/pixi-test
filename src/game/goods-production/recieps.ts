@@ -1,4 +1,7 @@
+import { getWorld } from '../../main'
 import { Disposable } from '../../utils/lifecycle'
+import { distance } from '../../utils/math'
+import { Movable, Source } from '../agent'
 import { GameClock } from '../time'
 
 interface GoodsContainer {
@@ -28,7 +31,7 @@ export class GoodsContainerBase implements GoodsContainer {
   }
 }
 
-export interface Worker {
+export interface Worker extends Movable {
   readonly inventory: GoodsContainer
   readonly clock: GameClock
   schedule(task: Task): void
@@ -81,9 +84,8 @@ class TaskNode implements Task {
     this.task.execute({
       inventory: this.worker.inventory,
       clock: this.worker.clock,
-      schedule: (task: Task) => {
-        this.worker.schedule(task)
-      },
+      move: (point) => this.worker.move(point),
+      schedule: (task: Task) => this.worker.schedule(task),
       yield: () => {
         if (!this.parent) {
           this.worker.yield()
@@ -109,6 +111,15 @@ class GenericProductionTask implements Task {
   }
   execute(worker: Worker): void {
     this.tracker?.dispose()
+    // TODO: rm clock from worker
+    // TODO: get available spots from worker and move to nearest
+    const spots = getWorld()
+      .scene.all(Source)
+      .filter((obj) => obj.tag === this.reward.tag)
+    if (spots.length > 0) {
+      const spot = spots[Math.floor(Math.random() * spots.length)]
+      worker.move(spot.renderable.position!)
+    }
     this.tracker = worker.clock.on('hour', () => {
       --this.hoursLeft
       if (this.hoursLeft === 0) {
@@ -147,7 +158,9 @@ export function loadTaskTree(recipe: RecipeModel, worker: Worker): TaskNode {
   for (const req of reqs) {
     const _recipe = RECIPES[req.tag]
     const reps = Math.ceil(req.amount / _recipe.yield)
-    children.push(...Array(reps).map(() => loadTaskTree(_recipe, worker)))
+    children.push(
+      ...Array.from(Array(reps)).map(() => loadTaskTree(_recipe, worker))
+    )
   }
   const task = toTaskNode(recipe, worker, reqs)
   children.forEach((child, i) => {
@@ -166,7 +179,7 @@ function toTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
   return new TaskNode(task, worker, reqs)
 }
 
-type GoodTag = 'weapon' | 'raw-meat' | 'animal' | 'skin'
+export type GoodTag = 'weapon' | 'raw-meat' | 'animal' | 'skin' | 'tree'
 
 export const RECIPES: Record<GoodTag, RecipeModel> = {
   'raw-meat': {
@@ -190,6 +203,11 @@ export const RECIPES: Record<GoodTag, RecipeModel> = {
     // TODO
     tag: 'weapon',
     manhours: 1,
+    yield: 1,
+  },
+  tree: {
+    tag: 'tree',
+    manhours: 4,
     yield: 1,
   },
 } as const

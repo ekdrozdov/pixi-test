@@ -3,12 +3,40 @@ import { Point } from '../renderer/renderable'
 import { SceneObject, SceneObjectBase } from './scene'
 import { World } from './world'
 import {
+  GoodTag,
   GoodsContainerBase,
   RECIPES,
   Task,
   Worker,
   loadTaskTree,
 } from './goods-production/recieps'
+
+export class Tree extends SceneObjectBase {
+  constructor() {
+    super()
+    this.renderable.kind = 'tree-source'
+  }
+}
+
+export class Source extends SceneObjectBase {
+  constructor(public tag: GoodTag) {
+    super()
+  }
+}
+
+export class TreeSource extends Source {
+  constructor() {
+    super('tree')
+    this.renderable.kind = 'tree-source'
+  }
+}
+
+export class AnimalSource extends Source {
+  constructor() {
+    super('animal')
+    this.renderable.kind = 'animal-source'
+  }
+}
 
 type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating'
 
@@ -27,10 +55,11 @@ export interface AnimalModel extends BiologicalModel {
   readonly speed: number
 }
 
-export interface Plant extends SceneObject, BiologicalModel {}
-
-export interface Animal extends SceneObject, Biological, AnimalModel {
+export interface Movable {
   move(point: Point): void
+}
+
+export interface Animal extends SceneObject, Biological, AnimalModel, Movable {
   sleep(): void
 }
 
@@ -65,14 +94,6 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
         if (this._hours % 8_760 === 0) this.age++
       })
     )
-  }
-}
-
-export class Bush extends BiologicalBase implements Plant {
-  object: SceneObject
-  constructor(model?: Partial<BiologicalModel>) {
-    super(model)
-    this.object = new SceneObjectBase()
   }
 }
 
@@ -153,20 +174,14 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
     const worker: Worker = {
       clock: this._world.clock,
       inventory: new GoodsContainerBase(),
+      move: (point) => this.move(point),
       schedule: (task) => {
         this.tasks.push(task)
-        // console.log(
-        //   `task queue: ${JSON.stringify(
-        //     this.tasks.map((task) => (task as any).task.reward)
-        //   )}`
-        // )
         console.log(JSON.stringify(this.tasks.length))
       },
       yield: () => poll(),
     }
     poll()
-    // working state executor
-    // this.register(world.clock.on('hour', () => poll()))
   }
 }
 

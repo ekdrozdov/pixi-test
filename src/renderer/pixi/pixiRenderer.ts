@@ -6,9 +6,13 @@ import { RenderableKind } from '../renderable'
 import { Disposable, DisposableStorage } from '../../utils/lifecycle'
 import { SceneObject } from '../../game/scene'
 import { EventEmitterBase } from '../../utils/events'
+import { MenuRegistry } from '../../ui/menu'
 
 const kindToSprite: Record<RenderableKind, string> = {
-  bunny: 'https://pixijs.com/assets/bunny.png',
+  bunny: 'http://localhost:5173/assets/bunny.png',
+  tree: 'http://localhost:5173/assets/tree.png',
+  'animal-source': 'http://localhost:5173/assets/animal-source.png',
+  'tree-source': 'http://localhost:5173/assets/tree-source.png',
 }
 
 export class PixiRenderer
@@ -25,8 +29,35 @@ export class PixiRenderer
     })
     document.body.appendChild(this._app.view as any)
   }
-  render(world: World): void {
+  render(world: World, registry: MenuRegistry): void {
     this.session?.dispose()
+
+    const uiListener = registry.on('registered', (e) => {
+      e.focus()
+      console.log(`selector: ${JSON.stringify(e.items)}`)
+      document.addEventListener('keydown', (_e) => {
+        if (_e.key === 'b') {
+          e.select('bunny')
+          console.log('bunny selected')
+          return
+        }
+        if (_e.key === 't') {
+          e.select('tree')
+          console.log('tree selected')
+          return
+        }
+        if (_e.key === 'l') {
+          e.select('tree-source')
+          console.log('tree-source selected')
+          return
+        }
+        if (_e.key === 'a') {
+          e.select('animal-source')
+          console.log('animal-source selected')
+          return
+        }
+      })
+    })
 
     const tracker = new Map<SceneObject, DisplayObject>()
 
@@ -39,6 +70,10 @@ export class PixiRenderer
     })
     this._app.stage.addChild(viewport as any)
     viewport.drag().pinch().wheel().decelerate()
+
+    viewport.addListener('clicked', (e) => {
+      this.dispatch('click', { position: e.world })
+    })
 
     world.scene.on('mount', ({ obj }) => {
       if (!obj.renderable.kind) throw new Error('Object kind is undefined')
@@ -72,6 +107,7 @@ export class PixiRenderer
       dispose: () => {
         this._app.ticker.remove(renderFrame)
         this._app.stage.removeChild(viewport)
+        uiListener.dispose()
       },
     }
   }

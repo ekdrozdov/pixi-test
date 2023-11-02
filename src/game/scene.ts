@@ -47,7 +47,7 @@ export interface Scene extends EventEmitter<SceneEvents> {
   mount(obj: SceneObject): void
   dismount(obj: SceneObject): void
   all(): readonly SceneObject[]
-  all<T extends SceneObject>(_class: new () => T): readonly T[]
+  all<T extends SceneObject>(_class: new (...args: any) => T): readonly T[]
 }
 
 export class SceneBase extends EventEmitterBase<SceneEvents> implements Scene {

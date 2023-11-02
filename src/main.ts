@@ -1,15 +1,22 @@
 import { Bunny } from './game/agent'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
+import { MenuRegistryBase, SpawnerSelector } from './ui/menu'
 
 const world = new WorldBase({ size: { x: 500, y: 500 } })
 const renderer = new PixiRenderer()
-renderer.render(world)
+const registry = new MenuRegistryBase()
+renderer.render(world, registry)
+registry.register(new SpawnerSelector(renderer, world.scene))
 const bunny = new Bunny()
 bunny.renderable.position = { x: world.size.x / 2, y: world.size.y / 2 }
 world.scene.mount(bunny)
 world.clock.setFreq(60)
 world.clock.resume()
+
+export function getWorld() {
+  return world
+}
 
 // clock.on('tick', () => {
 //   basicText.text = `days: ${clock.days}, hours: ${clock.hours}, minutes: ${clock.minutes}`
@@ -19,24 +26,6 @@ world.clock.resume()
 //     ai(agent)
 //     agent.controller.execute()
 //   })
-// })
-
-// const spawnAction = new Spawn(scene)
-// viewport.addListener('clicked', (e) => {
-//   const agents = scene.all()
-//   const eps = 10
-//   const selection = agents.find(
-//     (agent) =>
-//       Math.abs(agent.object.renderable.x - e.world.x) < eps &&
-//       Math.abs(agent.object.renderable.y - e.world.y) < eps
-//   )
-//   if (selection && selection instanceof Bunny) {
-//     infoDiv.textContent = `agent #${selection.object.id.toString()}, health: ${
-//       selection.health
-//     }, food: ${selection.food}`
-//     return
-//   }
-//   spawnAction.execute(new Bunny(), e.world)
 // })
 
 // const infoDiv = document.createElement('div')
