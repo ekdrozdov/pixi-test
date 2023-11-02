@@ -14,7 +14,7 @@ import {
 export class Tree extends SceneObjectBase {
   constructor() {
     super()
-    this.renderable.kind = 'tree-source'
+    this.renderable.kind = 'tree'
   }
 }
 
@@ -38,7 +38,7 @@ export class AnimalSource extends Source {
   }
 }
 
-type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating'
+type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating' | 'holding'
 
 export interface BiologicalModel {
   health: number
@@ -57,6 +57,8 @@ export interface AnimalModel extends BiologicalModel {
 
 export interface Movable {
   move(point: Point): void
+  hold(point: Point): void
+  stop(): void
 }
 
 export interface Animal extends SceneObject, Biological, AnimalModel, Movable {
@@ -102,7 +104,6 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
   speed: number
 
   private _moveTarget?: Point
-  private isBusy = false
   private tasks: Task[] = []
 
   constructor(model?: Partial<AnimalModel>) {
@@ -117,7 +118,15 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
 
   move(point: Point): void {
     this._moveTarget = point
-    this.isBusy = true
+    this.state = 'moving'
+  }
+
+  hold(point: Point): void {
+    this.state = 'holding'
+  }
+
+  stop(): void {
+    this.state = 'idle'
   }
 
   override onMount(world: World): void {
@@ -137,7 +146,7 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
           position.x === this._moveTarget.x &&
           position.y === this._moveTarget.y
         )
-          this.isBusy = false
+          this.state = 'idle'
       })
     )
     // random movement ai executor
@@ -145,7 +154,6 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
       world.clock.on('tick', () => {
         if (this.state !== 'idle') return
         if (!this.renderable.position) return
-        if (this.isBusy) return
         const moveChance = 0.05
         if (Math.random() > moveChance) return
         const moveBoxLimit = 300
@@ -172,9 +180,10 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
       poll()
     }
     const worker: Worker = {
-      clock: this._world.clock,
       inventory: new GoodsContainerBase(),
       move: (point) => this.move(point),
+      hold: (point) => this.hold(point),
+      stop: () => this.stop(),
       schedule: (task) => {
         this.tasks.push(task)
         console.log(JSON.stringify(this.tasks.length))

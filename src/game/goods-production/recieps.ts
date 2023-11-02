@@ -33,7 +33,6 @@ export class GoodsContainerBase implements GoodsContainer {
 
 export interface Worker extends Movable {
   readonly inventory: GoodsContainer
-  readonly clock: GameClock
   schedule(task: Task): void
   yield(): void
 }
@@ -83,8 +82,9 @@ class TaskNode implements Task {
   execute(): void {
     this.task.execute({
       inventory: this.worker.inventory,
-      clock: this.worker.clock,
       move: (point) => this.worker.move(point),
+      hold: (point) => this.worker.hold(point),
+      stop: () => this.worker.stop(),
       schedule: (task: Task) => this.worker.schedule(task),
       yield: () => {
         if (!this.parent) {
@@ -116,14 +116,17 @@ class GenericProductionTask implements Task {
     const spots = getWorld()
       .scene.all(Source)
       .filter((obj) => obj.tag === this.reward.tag)
+    let spot: Source | undefined = undefined
     if (spots.length > 0) {
-      const spot = spots[Math.floor(Math.random() * spots.length)]
+      spot = spots[Math.floor(Math.random() * spots.length)]
       worker.move(spot.renderable.position!)
     }
-    this.tracker = worker.clock.on('hour', () => {
+    this.tracker = getWorld().clock.on('hour', () => {
+      spot && worker.move(spot.renderable.position!)
       --this.hoursLeft
       if (this.hoursLeft === 0) {
         worker.inventory.store(this.reward)
+        this.pause()
         worker.yield()
       }
     })
@@ -179,8 +182,18 @@ function toTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
   return new TaskNode(task, worker, reqs)
 }
 
-export type GoodTag = 'weapon' | 'raw-meat' | 'animal' | 'skin' | 'tree'
+export type GoodTag =
+  | 'weapon'
+  | 'raw-meat'
+  | 'animal'
+  | 'skin'
+  | 'tree'
+  | 'house'
+  | 'meal'
+  | 'hide'
+  | 'cloth'
 
+// TODO: rm tag duplications
 export const RECIPES: Record<GoodTag, RecipeModel> = {
   'raw-meat': {
     tag: 'raw-meat',
@@ -200,7 +213,6 @@ export const RECIPES: Record<GoodTag, RecipeModel> = {
     components: [[{ tag: 'animal', amount: 1 }]],
   },
   weapon: {
-    // TODO
     tag: 'weapon',
     manhours: 1,
     yield: 1,
@@ -210,31 +222,28 @@ export const RECIPES: Record<GoodTag, RecipeModel> = {
     manhours: 4,
     yield: 1,
   },
+  house: {
+    tag: 'house',
+    manhours: 16,
+    yield: 1,
+    components: [[{ tag: 'tree', amount: 4 }]],
+  },
+  meal: {
+    tag: 'meal',
+    manhours: 1,
+    yield: 2,
+    components: [[{ tag: 'raw-meat', amount: 1 }]],
+  },
+  hide: {
+    tag: 'hide',
+    manhours: 2,
+    yield: 1,
+    components: [[{ tag: 'skin', amount: 1 }]],
+  },
+  cloth: {
+    tag: 'cloth',
+    manhours: 8,
+    yield: 1,
+    components: [[{ tag: 'hide', amount: 2 }]],
+  },
 } as const
-
-/**
- * hide recipe
- *  own a station
- *  own a tool
- *  own a skin
- *  go to the station
- *  work
- */
-
-/**
- * cloth recipe
- *  own a station
- *  own a tool
- *  own a materials
- *    OR hide
- *    OR textile
- *  go to the station
- *  work
- */
-
-/**
- * house recipe
- *  own materials for house kind
- *  go to spot
- *
- */
