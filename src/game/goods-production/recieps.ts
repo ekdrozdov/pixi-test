@@ -1,32 +1,32 @@
 import { getWorld } from '../../main'
 import { Disposable } from '../../utils/lifecycle'
-import { distance } from '../../utils/math'
 import { Movable, Source } from '../agent'
-import { GameClock } from '../time'
 
 export interface GoodsContainer {
   store(good: Good): void
   unstore(good: Good): Good
-  has(tag: GoodTag): boolean
+  has(tag: GoodTag, amount?: number): boolean
 }
 
 export class GoodsContainerBase implements GoodsContainer {
   private readonly goods = new Map<GoodTag, { amount: number }>()
-  has(tag: GoodTag): boolean {
-    return this.goods.has(tag)
+  has(tag: GoodTag, amount = 0): boolean {
+    const content = this.goods.get(tag)
+    if (!content) return false
+    return content.amount >= amount
   }
   store(good: Good): void {
-    let stored = this.goods.get(good.tag)
-    if (!stored) {
-      stored = { amount: 0 }
-      this.goods.set(good.tag, stored)
+    let content = this.goods.get(good.tag)
+    if (!content) {
+      content = { amount: 0 }
+      this.goods.set(good.tag, content)
     }
-    stored.amount += good.amount
-    console.log('=== STORED ===')
+    content.amount += good.amount
+    // console.log('=== STORED ===')
     for (const [tag, { amount }] of this.goods.entries()) {
-      console.log(`${tag}: ${amount}`)
+      // console.log(`${tag}: ${amount}`)
     }
-    console.log('=== ====== ===')
+    // console.log('==============')
   }
   unstore(request: Good): Good {
     let stored = this.goods.get(request.tag)
@@ -111,6 +111,15 @@ class TaskNode implements Task {
   }
 }
 
+class ReserveTask implements Task {
+  constructor(private readonly reserved: Good) {}
+  execute(worker: Worker): void {
+    worker.inventory.store(this.reserved)
+    worker.onFinished()
+  }
+  pause(): void {}
+}
+
 /**
  * Go to workplace and work for N hours.
  */
@@ -164,27 +173,64 @@ export interface RecipeModel {
   readonly components?: ReadonlyArray<ReadonlyArray<Good>>
 }
 
-export function loadTaskTree(recipe: RecipeModel, worker: Worker): TaskNode {
+export function createProdTaskTree(
+  recipe: RecipeModel,
+  worker: Worker
+): TaskNode {
   const reqs = (recipe.components ?? []).map((options) => options[0])
   const children: TaskNode[] = []
 
   for (const req of reqs) {
     const _recipe = RECIPES[req.tag]
-    const reps = Math.ceil(req.amount / _recipe.yield)
-    children.push(
-      ...Array.from(Array(reps)).map(() => loadTaskTree(_recipe, worker))
-    )
+    let debtAmount = req.amount
+    while (debtAmount > 0) {
+      let task: TaskNode
+      // Worker already has a good -> reserve it.
+      if (worker.inventory.has(_recipe.tag, debtAmount)) {
+        const reserved = worker.inventory.unstore({
+          tag: _recipe.tag,
+          amount: debtAmount,
+        })
+        task = new TaskNode(new ReserveTask(reserved), worker, [])
+        task.debt = reserved
+        debtAmount = 0
+      }
+      // Otherwise, produce it.
+      else {
+        task = createProdTaskTree(_recipe, worker)
+        const _debt = Math.min(debtAmount, _recipe.yield)
+        task.debt = { tag: _recipe.tag, amount: _debt }
+        debtAmount -= _debt
+      }
+      children.push(task)
+    }
+    // const reps = Math.ceil(req.amount / _recipe.yield)
+    // children.push(
+    //   ...Array.from(Array(reps)).map(() => {
+    //     if (worker.inventory.has(_recipe.tag, req.amount)) {
+    //       const reserved = worker.inventory.unstore({
+    //         tag: _recipe.tag,
+    //         amount: req.amount,
+    //       })
+    //       const task = new TaskNode(new ReserveTask(reserved), worker, [])
+    //       task.debt = reserved
+    //       return task
+    //     }
+    //     const task = createProdTaskTree(_recipe, worker)
+    //     // task.debt =
+    //     return task
+    //   })
+    // )
   }
-  const task = toTaskNode(recipe, worker, reqs)
+  const task = createProdTaskNode(recipe, worker, reqs)
   children.forEach((child, i) => {
     task.addChild(child)
     child.parent = task
-    child.debt = reqs[i]
   })
   return task
 }
 
-function toTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
+function createProdTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
   const task = new GenericProductionTask(recipe.manhours, {
     tag: GOODS[recipe.tag],
     amount: recipe.yield,
@@ -246,7 +292,7 @@ export const RECIPES: Record<GoodTag, RecipeModel> = {
     tag: GOODS.HOUSE,
     manhours: 16,
     yield: 1,
-    components: [[{ tag: GOODS.TREE, amount: 4 }]],
+    components: [[{ tag: GOODS.TREE, amount: 16 }]],
   },
   MEAL: {
     tag: GOODS.MEAL,

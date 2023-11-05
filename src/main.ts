@@ -23,7 +23,7 @@ treeSource.renderable.position = {
 world.scene.mount(bunny)
 world.scene.mount(huntingSource)
 world.scene.mount(treeSource)
-world.clock.setFreq(200)
+world.clock.setFreq(100)
 world.clock.resume()
 
 export function getWorld() {

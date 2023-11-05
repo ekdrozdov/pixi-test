@@ -10,9 +10,9 @@ import {
   RECIPES,
   Task,
   Worker,
-  loadTaskTree,
+  createProdTaskTree,
 } from './goods-production/recieps'
-import { NeedsChain, NeedsChainBase, NeedsSubject } from './demands'
+import { NeedsChain, NeedsChainBase, NeedsSubject } from './needs'
 
 export class Tree extends SceneObjectBase {
   constructor() {
@@ -186,7 +186,7 @@ export class AnimalAgentBase
       world.clock.on('hour', () => {
         if (this.activeTask) return
         const need = this.needs.getNeed()
-        console.log(`Doing ${need}`)
+        // console.log(`Doing ${need}`)
         // No needs -> chill like an animal.
         if (need === undefined) return
 
@@ -222,7 +222,7 @@ export class AnimalAgentBase
         let queue = this.needsCentricTasks.get(need)
         // Already has scheduled tasks -> do it.
         if (queue !== undefined && queue.length !== 0) {
-          console.log('Found unfinished task, continue')
+          // console.log('Found unfinished task, continue')
           poll()
           return
         }
@@ -230,18 +230,19 @@ export class AnimalAgentBase
         this.needsCentricTasks.set(need, queue)
         // Or create it:
         // find suitable recipe and schedule task tree.
-        console.log('Lookup recipe and start it')
+        // console.log('Lookup recipe and start it')
         const targetRecipe = RECIPES[need]
-        loadTaskTree(targetRecipe, worker).schedule(worker)
+        createProdTaskTree(targetRecipe, worker).schedule(worker)
         poll()
       })
     )
     // reset needs
     this.register(
       world.clock.on('month', () => {
-        console.log('Restart needs chain')
+        // console.log('Reset needs chain')
         this.needs.reset()
         this.activeTask?.pause()
+        this.activeTask = undefined
       })
     )
   }

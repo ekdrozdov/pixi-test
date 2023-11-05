@@ -1,5 +1,5 @@
 import { Viewport } from 'pixi-viewport'
-import { Application, Container, DisplayObject, Sprite } from 'pixi.js'
+import { Application, Container, DisplayObject, Sprite, Ticker } from 'pixi.js'
 import { World } from '../../game/world'
 import { Renderer, RendererEvent } from '../renderer'
 import { RenderableKind } from '../renderable'
@@ -19,17 +19,21 @@ export class PixiRenderer
   extends EventEmitterBase<RendererEvent>
   implements Renderer
 {
-  private readonly _app: Application
+  // private readonly _app: Application
   private session?: Disposable
   constructor() {
     super()
+    return
     this._app = new Application({
       background: '#1099bb',
       resizeTo: window,
     })
+    this._app.ticker.maxFPS = 1
+    // Ticker.targetFPMS = 0.0001
     document.body.appendChild(this._app.view as any)
   }
   render(world: World, registry: MenuRegistry): void {
+    return
     this.session?.dispose()
 
     const uiListener = registry.on('registered', (e) => {
@@ -89,9 +93,9 @@ export class PixiRenderer
       tracker.delete(obj)
     })
 
-    world.clock.on('day', () => {
-      console.log(`day ${world.clock.days}`)
-    })
+    // world.clock.on('day', () => {
+    //   console.log(`day ${world.clock.days}`)
+    // })
 
     const renderFrame = () => {
       for (const [{ renderable }, dObj] of tracker.entries()) {

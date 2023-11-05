@@ -57,9 +57,7 @@ export class GameClockBase
     this._isRunning = false
   }
   setFreq(value: number): void {
-    clearInterval(this._intervalId)
-    if (value === 0) return
-    this._intervalId = setInterval(() => {
+    const update = () => {
       this._isRunning && this.dispatch('tick', undefined)
       // console.log(`${this.hours}`)
 
@@ -78,10 +76,19 @@ export class GameClockBase
       this.month = ++this.month % 12
       if (this.month !== 0) {
         this.dispatch('month', undefined)
+        console.log(`month ${this.month}`)
         return
       }
       this.years = ++this.years
       this.dispatch('year', undefined)
+      console.log(`year ${this.years}`)
+    }
+    clearInterval(this._intervalId)
+    if (value === 0) return
+    this._intervalId = setInterval(() => {
+      for (let i = 0; i < 60 * 24 * 365 * 10; i++) {
+        update()
+      }
     }, 1000 / value)
   }
 }
