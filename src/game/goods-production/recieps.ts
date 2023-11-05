@@ -4,13 +4,17 @@ import { distance } from '../../utils/math'
 import { Movable, Source } from '../agent'
 import { GameClock } from '../time'
 
-interface GoodsContainer {
+export interface GoodsContainer {
   store(good: Good): void
   unstore(good: Good): Good
+  has(tag: GoodTag): boolean
 }
 
 export class GoodsContainerBase implements GoodsContainer {
   private readonly goods = new Map<GoodTag, { amount: number }>()
+  has(tag: GoodTag): boolean {
+    return this.goods.has(tag)
+  }
   store(good: Good): void {
     let stored = this.goods.get(good.tag)
     if (!stored) {
@@ -18,14 +22,20 @@ export class GoodsContainerBase implements GoodsContainer {
       this.goods.set(good.tag, stored)
     }
     stored.amount += good.amount
+    console.log('=== STORED ===')
     for (const [tag, { amount }] of this.goods.entries()) {
       console.log(`${tag}: ${amount}`)
     }
+    console.log('=== ====== ===')
   }
   unstore(request: Good): Good {
     let stored = this.goods.get(request.tag)
-    if (!stored) throw new Error('Missing stored')
-    if (stored.amount < request.amount) throw new Error('Not sufficient amount')
+    if (!stored) return { amount: 0, tag: request.tag }
+    if (stored.amount < request.amount) {
+      const result = { tag: request.tag, amount: stored.amount }
+      stored.amount = 0
+      return result
+    }
     stored.amount -= request.amount
     return request
   }
@@ -34,7 +44,7 @@ export class GoodsContainerBase implements GoodsContainer {
 export interface Worker extends Movable {
   readonly inventory: GoodsContainer
   schedule(task: Task): void
-  yield(): void
+  onFinished(): void
 }
 
 export interface Task {
@@ -70,7 +80,7 @@ class TaskNode implements Task {
   supply(good: Good) {
     this.reqs.splice(0, 1)
     if (this.reqs.length === 0) {
-      this.worker.schedule(this.task)
+      this.worker.schedule(this)
     }
   }
 
@@ -86,16 +96,16 @@ class TaskNode implements Task {
       hold: (point) => this.worker.hold(point),
       stop: () => this.worker.stop(),
       schedule: (task: Task) => this.worker.schedule(task),
-      yield: () => {
+      onFinished: () => {
         if (!this.parent) {
-          this.worker.yield()
+          this.worker.onFinished()
           return
         }
         if (!this.debt) throw new Error('Missing debt')
         const good = this.worker.inventory.unstore(this.debt)
         if (good.amount < this.debt.amount) throw new Error('Missing goods')
         this.parent.supply(good)
-        this.worker.yield()
+        this.worker.onFinished()
       },
     })
   }
@@ -127,7 +137,7 @@ class GenericProductionTask implements Task {
       if (this.hoursLeft === 0) {
         worker.inventory.store(this.reward)
         this.pause()
-        worker.yield()
+        worker.onFinished()
       }
     })
   }
@@ -176,74 +186,84 @@ export function loadTaskTree(recipe: RecipeModel, worker: Worker): TaskNode {
 
 function toTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
   const task = new GenericProductionTask(recipe.manhours, {
-    tag: recipe.tag,
+    tag: GOODS[recipe.tag],
     amount: recipe.yield,
   })
   return new TaskNode(task, worker, reqs)
 }
 
-export type GoodTag =
-  | 'weapon'
-  | 'raw-meat'
-  | 'animal'
-  | 'skin'
-  | 'tree'
-  | 'house'
-  | 'meal'
-  | 'hide'
-  | 'cloth'
+export const GOODS = {
+  WEAPON: 'WEAPON',
+  MEAT: 'MEAT',
+  ANIMAL: 'ANIMAL',
+  SKIN: 'SKIN',
+  TREE: 'TREE',
+  HOUSE: 'HOUSE',
+  MEAL: 'MEAL',
+  HIDE: 'HIDE',
+  CLOTH: 'CLOTH',
+} as const
+
+// export const NEED_TO_GOODS: Record<NeedTag, ReadonlyArray<GoodTag>> = {
+//   [NEEDS.FOOD]: [GOODS.MEAL],
+//   [NEEDS.CLOTH]: [GOODS.CLOTH],
+//   [NEEDS.HOUSE]: [GOODS.HOUSE],
+//   [NEEDS.SEX]: [],
+// } as const
+
+export type GoodTag = (typeof GOODS)[keyof typeof GOODS]
 
 // TODO: rm tag duplications
 export const RECIPES: Record<GoodTag, RecipeModel> = {
-  'raw-meat': {
-    tag: 'raw-meat',
+  MEAT: {
+    tag: GOODS.MEAT,
     manhours: 2,
     yield: 4,
-    components: [[{ tag: 'animal', amount: 1 }]] as const,
+    components: [[{ tag: GOODS.ANIMAL, amount: 1 }]],
   },
-  animal: {
-    tag: 'animal',
+  ANIMAL: {
+    tag: GOODS.ANIMAL,
     manhours: 4,
     yield: 1,
   },
-  skin: {
-    tag: 'skin',
+  SKIN: {
+    tag: GOODS.SKIN,
     manhours: 4,
     yield: 2,
-    components: [[{ tag: 'animal', amount: 1 }]],
+    components: [[{ tag: GOODS.ANIMAL, amount: 1 }]],
   },
-  weapon: {
-    tag: 'weapon',
+  WEAPON: {
+    tag: GOODS.WEAPON,
     manhours: 1,
     yield: 1,
   },
-  tree: {
-    tag: 'tree',
+  TREE: {
+    tag: GOODS.TREE,
     manhours: 4,
     yield: 1,
   },
-  house: {
-    tag: 'house',
+  HOUSE: {
+    tag: GOODS.HOUSE,
     manhours: 16,
     yield: 1,
-    components: [[{ tag: 'tree', amount: 4 }]],
+    components: [[{ tag: GOODS.TREE, amount: 4 }]],
   },
-  meal: {
-    tag: 'meal',
+  MEAL: {
+    tag: GOODS.MEAL,
     manhours: 1,
     yield: 2,
-    components: [[{ tag: 'raw-meat', amount: 1 }]],
+    components: [[{ tag: GOODS.MEAT, amount: 1 }]],
   },
-  hide: {
-    tag: 'hide',
+  HIDE: {
+    tag: GOODS.HIDE,
     manhours: 2,
     yield: 1,
-    components: [[{ tag: 'skin', amount: 1 }]],
+    components: [[{ tag: GOODS.SKIN, amount: 1 }]],
   },
-  cloth: {
-    tag: 'cloth',
+  CLOTH: {
+    tag: GOODS.CLOTH,
     manhours: 8,
     yield: 1,
-    components: [[{ tag: 'hide', amount: 2 }]],
+    components: [[{ tag: GOODS.HIDE, amount: 2 }]],
   },
 } as const

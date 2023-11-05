@@ -3,13 +3,16 @@ import { Point } from '../renderer/renderable'
 import { SceneObject, SceneObjectBase } from './scene'
 import { World } from './world'
 import {
+  GOODS,
   GoodTag,
+  GoodsContainer,
   GoodsContainerBase,
   RECIPES,
   Task,
   Worker,
   loadTaskTree,
 } from './goods-production/recieps'
+import { NeedsChain, NeedsChainBase, NeedsSubject } from './demands'
 
 export class Tree extends SceneObjectBase {
   constructor() {
@@ -26,14 +29,14 @@ export class Source extends SceneObjectBase {
 
 export class TreeSource extends Source {
   constructor() {
-    super('tree')
+    super(GOODS.TREE)
     this.renderable.kind = 'tree-source'
   }
 }
 
 export class AnimalSource extends Source {
   constructor() {
-    super('animal')
+    super(GOODS.ANIMAL)
     this.renderable.kind = 'animal-source'
   }
 }
@@ -99,17 +102,25 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
   }
 }
 
-export class AnimalAgentBase extends BiologicalBase implements Animal {
+export class AnimalAgentBase
+  extends BiologicalBase
+  implements Animal, NeedsSubject
+{
   object: SceneObject
   speed: number
-
   private _moveTarget?: Point
-  private tasks: Task[] = []
+  private needsCentricTasks = new Map<GoodTag, Task[]>()
+  private needs: NeedsChain = new NeedsChainBase(this)
+  inventory: GoodsContainer = new GoodsContainerBase()
 
   constructor(model?: Partial<AnimalModel>) {
     super(model)
     this.object = new SceneObjectBase()
     this.speed = model?.speed ?? 5
+  }
+
+  onStarve(): void {
+    this.die()
   }
 
   sleep(): void {
@@ -128,6 +139,8 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
   stop(): void {
     this.state = 'idle'
   }
+
+  private activeTask?: Task
 
   override onMount(world: World): void {
     super.onMount(world)
@@ -168,29 +181,69 @@ export class AnimalAgentBase extends BiologicalBase implements Animal {
         this.move(point)
       })
     )
+    // fulfill needs
+    this.register(
+      world.clock.on('hour', () => {
+        if (this.activeTask) return
+        const need = this.needs.getNeed()
+        console.log(`Doing ${need}`)
+        // No needs -> chill like an animal.
+        if (need === undefined) return
 
-    const poll = () => {
-      const task = this.tasks.shift()
-      if (task !== undefined) {
-        const result = task.execute(worker)
-        return
-      }
-      const targetRecipe = RECIPES['skin']
-      loadTaskTree(targetRecipe, worker).schedule(worker)
-      poll()
-    }
-    const worker: Worker = {
-      inventory: new GoodsContainerBase(),
-      move: (point) => this.move(point),
-      hold: (point) => this.hold(point),
-      stop: () => this.stop(),
-      schedule: (task) => {
-        this.tasks.push(task)
-        console.log(JSON.stringify(this.tasks.length))
-      },
-      yield: () => poll(),
-    }
-    poll()
+        const poll = () => {
+          if (!queue) throw new Error('Missing queue')
+          const task = queue[0]
+          if (task !== undefined) {
+            task.execute(worker)
+            this.activeTask = task
+            return
+          }
+          this.activeTask = undefined
+        }
+
+        const worker: Worker = {
+          inventory: this.inventory,
+          move: (point) => this.move(point),
+          hold: (point) => this.hold(point),
+          stop: () => this.stop(),
+          schedule: (task) => {
+            if (!queue) throw new Error('Missing queue')
+            queue.push(task)
+          },
+          onFinished: () => {
+            if (!queue) throw new Error('Missing queue')
+            // If task is finished, remove it from queue.
+            queue.shift()
+            poll()
+          },
+        }
+
+        // Find a way to fulfill a need and schedule tasks.
+        let queue = this.needsCentricTasks.get(need)
+        // Already has scheduled tasks -> do it.
+        if (queue !== undefined && queue.length !== 0) {
+          console.log('Found unfinished task, continue')
+          poll()
+          return
+        }
+        queue = []
+        this.needsCentricTasks.set(need, queue)
+        // Or create it:
+        // find suitable recipe and schedule task tree.
+        console.log('Lookup recipe and start it')
+        const targetRecipe = RECIPES[need]
+        loadTaskTree(targetRecipe, worker).schedule(worker)
+        poll()
+      })
+    )
+    // reset needs
+    this.register(
+      world.clock.on('month', () => {
+        console.log('Restart needs chain')
+        this.needs.reset()
+        this.activeTask?.pause()
+      })
+    )
   }
 }
 

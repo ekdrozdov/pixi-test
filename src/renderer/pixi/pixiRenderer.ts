@@ -89,6 +89,10 @@ export class PixiRenderer
       tracker.delete(obj)
     })
 
+    world.clock.on('day', () => {
+      console.log(`day ${world.clock.days}`)
+    })
+
     const renderFrame = () => {
       for (const [{ renderable }, dObj] of tracker.entries()) {
         if (renderable.position) {

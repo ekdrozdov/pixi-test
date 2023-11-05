@@ -11,14 +11,15 @@ export type GameClockEvents = {
    * Tick represents a minimal game time unit.
    */
   tick: void
-  /**
-   * Represents a game hour.
-   */
   hour: void
+  day: void
+  month: void
+  year: void
 }
 
 export interface GameClock extends Event<GameClockEvents> {
   readonly years: number
+  readonly month: number
   readonly days: number
   readonly hours: number
   readonly minutes: number
@@ -35,6 +36,7 @@ export class GameClockBase
   implements GameClock
 {
   years = 0
+  month = 0
   days = 0
   hours = 0
   minutes = 0
@@ -59,7 +61,7 @@ export class GameClockBase
     if (value === 0) return
     this._intervalId = setInterval(() => {
       this._isRunning && this.dispatch('tick', undefined)
-      console.log(`${this.hours}`)
+      // console.log(`${this.hours}`)
 
       this.minutes = ++this.minutes % 60
       if (this.minutes !== 0) return
@@ -69,8 +71,17 @@ export class GameClockBase
         return
       }
       this.days = ++this.days % 30
-      if (this.days !== 0) return
-      this.years = ++this.years % 365
+      if (this.days !== 0) {
+        this.dispatch('day', undefined)
+        return
+      }
+      this.month = ++this.month % 12
+      if (this.month !== 0) {
+        this.dispatch('month', undefined)
+        return
+      }
+      this.years = ++this.years
+      this.dispatch('year', undefined)
     }, 1000 / value)
   }
 }
