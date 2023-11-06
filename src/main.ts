@@ -1,4 +1,5 @@
 import { AnimalSource, Bunny, TreeSource } from './game/agent'
+import { Customer, MarketBase, Producer } from './game/market'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 import { MenuRegistryBase, SpawnerSelector } from './ui/menu'
@@ -25,6 +26,12 @@ world.scene.mount(huntingSource)
 world.scene.mount(treeSource)
 world.clock.setFreq(100)
 world.clock.resume()
+
+const market = new MarketBase()
+new Producer(market)
+new Producer(market)
+new Customer(market)
+new Customer(market)
 
 export function getWorld() {
   return world

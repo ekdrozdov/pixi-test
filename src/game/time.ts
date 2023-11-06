@@ -86,10 +86,12 @@ export class GameClockBase
     clearInterval(this._intervalId)
     if (value === 0) return
     this._intervalId = setInterval(() => {
-      update()
       // for (let i = 0; i < 60 * 24 * 365 * 10; i++) {
       //   update()
       // }
+      for (let i = 0; i < 30; i++) {
+        update()
+      }
     }, 1000 / value)
   }
 }
