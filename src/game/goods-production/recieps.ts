@@ -173,6 +173,9 @@ export interface RecipeModel {
   readonly components?: ReadonlyArray<ReadonlyArray<Good>>
 }
 
+/**
+ * Recursively creates task tree of production tasks for a recipe.
+ */
 export function createProdTaskTree(
   recipe: RecipeModel,
   worker: Worker
@@ -204,23 +207,6 @@ export function createProdTaskTree(
       }
       children.push(task)
     }
-    // const reps = Math.ceil(req.amount / _recipe.yield)
-    // children.push(
-    //   ...Array.from(Array(reps)).map(() => {
-    //     if (worker.inventory.has(_recipe.tag, req.amount)) {
-    //       const reserved = worker.inventory.unstore({
-    //         tag: _recipe.tag,
-    //         amount: req.amount,
-    //       })
-    //       const task = new TaskNode(new ReserveTask(reserved), worker, [])
-    //       task.debt = reserved
-    //       return task
-    //     }
-    //     const task = createProdTaskTree(_recipe, worker)
-    //     // task.debt =
-    //     return task
-    //   })
-    // )
   }
   const task = createProdTaskNode(recipe, worker, reqs)
   children.forEach((child, i) => {

@@ -6,7 +6,7 @@ interface Lot {
   buy(want: Good, offer: GoodTag): void
 }
 
-interface Market {
+export interface Market {
   register(): Lot
   getPricesFor(good: GoodTag): Good[]
 }
