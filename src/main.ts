@@ -1,5 +1,5 @@
 import { AnimalSource, Bunny, TreeSource } from './game/agent'
-import { Customer, MarketBase, Producer } from './game/market'
+import { DumbCustomer, DumbMarket, DumbProducer } from './game/market'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 import { MenuRegistryBase, SpawnerSelector } from './ui/menu'
@@ -27,25 +27,26 @@ world.scene.mount(treeSource)
 world.clock.setFreq(100)
 world.clock.resume()
 
-const market = new MarketBase()
-new Producer(market)
-new Producer(market)
-new Customer(market)
-new Customer(market)
+const market = new DumbMarket()
+const base = 100
+new DumbProducer(market, 5500)
+let count = 100
+while (count > 0) {
+  Array.from(Array(count).keys()).map(
+    (_, i) => new DumbCustomer(market, base + i * 10, 1)
+  )
+  count--
+}
 
 export function getWorld() {
   return world
 }
 
 /**
- * TODO:
- * +set scene with couple of lumbers and animal spots near the test rabbit
- *  add house building
- *  +house recipe
- *  +lumbering
- * add tools production
- * add ownership (and owership contest???!)
- * add needs
+ * experiment:
+ *  agent A knows only how to hunt
+ *  agent B knows only how to cut lumber
+ * Register agents on the market and see how it goes.
  */
 
 // clock.on('tick', () => {

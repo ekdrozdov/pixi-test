@@ -156,7 +156,7 @@ class GenericProductionTask implements Task {
   }
 }
 
-interface Good {
+export interface Good {
   tag: GoodTag
   amount: number
 }

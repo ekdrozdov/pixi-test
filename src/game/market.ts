@@ -1,90 +1,39 @@
 import { getWorld } from '../main'
+import { Good, GoodTag } from './goods-production/recieps'
 
 interface Lot {
-  amount: number
-  price: number
+  sell(offer: Good, want: GoodTag): void
+  buy(want: Good, offer: GoodTag): void
 }
 
 interface Market {
-  register(lot: Lot): void
-  /**
-   * @returns less expensive Lot
-   */
-  getBest(): Lot | undefined
-  buy(lot: Lot, amount: number): void
+  register(): Lot
+  getPricesFor(good: GoodTag): Good[]
 }
 
-export class MarketBase implements Market {
-  lots: Lot[] = []
-  constructor() {
-    getWorld().clock.on('day', () => {
-      console.log(JSON.stringify(this.lots))
-    })
+class MarketBase implements Market {
+  prices = new Map<GoodTag, PriceTracker[]>()
+  register(): Lot {
+    return {
+      sell: (offer: Good, want: GoodTag) => {},
+      buy: (want: Good, offer: GoodTag) => {},
+    }
   }
-  register(lot: Lot): void {
-    this.lots.push(lot)
-  }
-  getBest(): Lot | undefined {
-    const nonEmptyLots = this.lots.filter((lot) => lot.amount !== 0)
-    if (nonEmptyLots.length === 0) return undefined
-    nonEmptyLots.sort((a, b) => a.price - b.price)
-    return nonEmptyLots[0]
-  }
-  buy(lot: Lot, amount: number): void {
-    if (amount > lot.amount) throw new Error('Invalid argument')
-    lot.amount -= amount
+  getPricesFor(good: GoodTag): Good[] {
+    throw new Error('Method not implemented.')
   }
 }
 
-const baselineCost = 100
-const setupFeeCost = 100
-
-/**
- * I want to buy an N items of X:
- *  find the min price
- *  if min price is less or equal then self-production cost, buy
- */
-export class Customer {
-  buyDaily = 7
-  constructor(market: Market) {
-    let purchasesLeft = this.buyDaily
-    getWorld().clock.on('tick', () => {
-      const lot = market.getBest()
-      if (!lot) return
-      if (lot.price <= baselineCost + setupFeeCost) {
-        const toBuy = Math.min(lot.amount, purchasesLeft)
-        market.buy(lot, toBuy)
-        purchasesLeft -= toBuy
-      }
-    })
-    getWorld().clock.on('day', () => {
-      purchasesLeft = this.buyDaily
-    })
-  }
+interface PriceTracker {
+  readonly price: number
+  supply(amount: number): void
+  demand(amount: number): void
+  reset(): void
 }
 
-/**
- * I want to sell an N items of X:
- *  the price is total amount of manhours to produce X
- *  if no goods were sold, decrease price
- *  if sold out, increase price
- */
-export class Producer {
-  supplyPerDay = 10
-  price = baselineCost
-  constructor(market: Market) {
-    const lot: Lot = { amount: 0, price: baselineCost }
-    market.register(lot)
-    getWorld().clock.on('day', () => {
-      if (lot.amount === 0) {
-        this.price += 10
-      }
-      if (lot.amount > this.supplyPerDay / 2) {
-        this.price -= 10
-      }
-      lot.price = Math.max(this.price, Math.floor(baselineCost * 0.3))
-      lot.amount = this.supplyPerDay
-    })
+class PriceTrackerBase {
+  constructor(lhs: GoodTag, rhs: GoodTag) {
+    // find labor costs -> baseline costs
   }
 }
 
@@ -98,3 +47,52 @@ export class Producer {
  * Production down
  *  product price is less than baseline
  */
+
+export class DumbMarket {
+  basePrice = 100
+  price = 100
+  demandCount = 1
+  supplyCount = 1
+  cries = 0
+  constructor() {
+    getWorld().clock.on('day', () => {
+      this.price = Math.max(
+        Math.floor(this.basePrice * (this.demandCount / this.supplyCount)),
+        Math.floor(this.basePrice * 0.2)
+      )
+      console.log(`price: ${this.price}, potential: ${this.cries}`)
+      this.demandCount = 0
+      this.supplyCount = 0
+      this.cries = 0
+    })
+  }
+  supply(amount: number): void {
+    this.supplyCount += amount
+  }
+  demand(amount: number) {
+    this.demandCount += amount
+  }
+  cry(amount: number) {
+    this.cries += amount
+  }
+}
+
+export class DumbCustomer {
+  constructor(market: DumbMarket, budgetPerItem: number, toBuy: number) {
+    getWorld().clock.on('day', () => {
+      if (market.price <= budgetPerItem) {
+        market.demand(toBuy)
+      } else {
+        market.cry(toBuy)
+      }
+    })
+  }
+}
+
+export class DumbProducer {
+  constructor(market: DumbMarket, toSell: number) {
+    getWorld().clock.on('day', () => {
+      market.supply(toSell)
+    })
+  }
+}
