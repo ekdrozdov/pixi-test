@@ -59,7 +59,6 @@ export class GameClockBase
   setFreq(value: number): void {
     const update = () => {
       this._isRunning && this.dispatch('tick', undefined)
-      // console.log(`${this.hours}`)
 
       this.minutes = ++this.minutes % 60
       if (this.minutes !== 0) return

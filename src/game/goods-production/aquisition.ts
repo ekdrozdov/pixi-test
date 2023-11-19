@@ -36,6 +36,7 @@ function buildChildrenOf(node: ReqsTreeNode): ReqsTreeNode[] | undefined {
   const components = recipe.components
   if (components === undefined) return
 
+  const children = []
   for (const componentOptions of components) {
     // Just pick a first option for now.
     const option = componentOptions[0]
@@ -44,13 +45,15 @@ function buildChildrenOf(node: ReqsTreeNode): ReqsTreeNode[] | undefined {
       amount: option.amount,
     }
     buildChildrenOf(reqNode)
+    children.push(reqNode)
   }
+  return children
 }
 
-interface EstimationContext {
-  readonly skill: Record<GoodTag, number | undefined>
-  readonly inventory: GoodsContainer
-  readonly market: Market
+export interface EstimationContext {
+  readonly skill: Partial<Record<GoodTag, number | undefined>>
+  readonly assets: GoodsContainer
+  readonly market?: Market
 }
 
 /**
@@ -103,6 +106,7 @@ function estimateBuy(
   good: Good,
   context: EstimationContext
 ): number | undefined {
+  if (context.market === undefined) return undefined
   const prices = context.market.getPricesFor(good.tag)
   // Try to find best deal by prices vs weighted inventory.
   return undefined
@@ -122,7 +126,7 @@ export function evalBestTask(
     case 'produce':
       // Dfs unfulfilled node.
       for (const child of node.children ?? []) {
-        if (!context.inventory.has(node.tag, node.amount)) {
+        if (!context.assets.has(node.tag, node.amount)) {
           return evalBestTask(child, context)
         }
       }
@@ -132,6 +136,7 @@ export function evalBestTask(
         amount: recipe.yield,
       })
     case 'buy':
+      if (context.market === undefined) throw new Error('Missing market')
       return new BuyTask(context.market, {
         tag: recipe.tag,
         amount: recipe.yield,

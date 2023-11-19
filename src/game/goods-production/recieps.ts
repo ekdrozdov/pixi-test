@@ -23,11 +23,11 @@ export class GoodsContainerBase implements GoodsContainer {
       this.goods.set(good.tag, content)
     }
     content.amount += good.amount
-    // console.log('=== STORED ===')
+    console.log('=== STORED ===')
     for (const [tag, { amount }] of this.goods.entries()) {
-      // console.log(`${tag}: ${amount}`)
+      console.log(`${tag}: ${amount}`)
     }
-    // console.log('==============')
+    console.log('==============')
   }
   unstore(request: Good): Good {
     let stored = this.goods.get(request.tag)
@@ -42,92 +42,36 @@ export class GoodsContainerBase implements GoodsContainer {
   }
 }
 
-export interface Worker extends Movable {
-  readonly inventory: GoodsContainer
-  readonly projects: Record<GoodTag, number>
-  schedule(task: Task): void
+export interface WorkerController extends Movable {
+  readonly assets: GoodsContainer
+  readonly projects: Partial<Record<GoodTag, number>>
   onFinished(): void
+  onStarve(): void
 }
 
 export interface Task {
   /**
    * Encapsulates behavior.
    */
-  execute(worker: Worker): void
-  pause(): void
+  execute(controller: WorkerController): void
+  cancel(): void
 }
-
-// class TaskNode implements Task {
-//   private children?: TaskNode[]
-//   parent?: TaskNode
-//   debt?: Good
-//   constructor(
-//     private readonly task: Task,
-//     private readonly worker: Worker,
-//     private readonly reqs: Good[]
-//   ) {}
-
-//   schedule(worker: Worker) {
-//     if (!this.children) {
-//       worker.schedule(this)
-//       return
-//     }
-//     this.children.forEach((child) => child.schedule(worker))
-//   }
-
-//   pause(): void {
-//     this.task.pause()
-//   }
-
-//   supply(good: Good) {
-//     this.reqs.splice(0, 1)
-//     if (this.reqs.length === 0) {
-//       this.worker.schedule(this)
-//     }
-//   }
-
-//   addChild(node: TaskNode) {
-//     if (!this.children) this.children = []
-//     this.children.push(node)
-//   }
-
-//   execute(): void {
-//     this.task.execute({
-//       inventory: this.worker.inventory,
-//       move: (point) => this.worker.move(point),
-//       hold: (point) => this.worker.hold(point),
-//       stop: () => this.worker.stop(),
-//       schedule: (task: Task) => this.worker.schedule(task),
-//       onFinished: () => {
-//         if (!this.parent) {
-//           this.worker.onFinished()
-//           return
-//         }
-//         if (!this.debt) throw new Error('Missing debt')
-//         const good = this.worker.inventory.unstore(this.debt)
-//         if (good.amount < this.debt.amount) throw new Error('Missing goods')
-//         this.parent.supply(good)
-//         this.worker.onFinished()
-//       },
-//     })
-//   }
-// }
 
 class ReserveTask implements Task {
   constructor(private readonly reserved: Good) {}
-  execute(worker: Worker): void {
-    worker.inventory.store(this.reserved)
+  execute(worker: WorkerController): void {
+    worker.assets.store(this.reserved)
     worker.onFinished()
   }
-  pause(): void {}
+  cancel(): void {}
 }
 
 export class BuyTask implements Task {
   constructor(private market: Market, good: Good) {}
-  execute(worker: Worker): void {
+  execute(worker: WorkerController): void {
     throw new Error()
   }
-  pause(): void {}
+  cancel(): void {}
 }
 
 /**
@@ -136,7 +80,7 @@ export class BuyTask implements Task {
 export class GenericProductionTask implements Task {
   private timer?: Disposable
   constructor(private readonly hoursCost: number, private reward: Good) {}
-  execute(worker: Worker): void {
+  execute(worker: WorkerController): void {
     this.timer?.dispose()
     if (
       worker.projects[this.reward.tag] === undefined ||
@@ -157,15 +101,16 @@ export class GenericProductionTask implements Task {
     }
     this.timer = getWorld().clock.on('hour', () => {
       spot && worker.move(spot.renderable.position!)
-      worker.projects[this.reward.tag]--
+      // TODO: guess better to check it.
+      worker.projects[this.reward.tag]!--
       if (worker.projects[this.reward.tag] === 0) {
-        worker.inventory.store(this.reward)
-        this.pause()
+        worker.assets.store(this.reward)
+        this.cancel()
         worker.onFinished()
       }
     })
   }
-  pause(): void {
+  cancel(): void {
     this.timer?.dispose()
     this.timer = undefined
   }
@@ -188,57 +133,6 @@ export interface RecipeModel {
   readonly components?: ReadonlyArray<ReadonlyArray<Good>>
 }
 
-/**
- * Recursively creates task tree of production tasks for a recipe.
- */
-// export function createProdTaskTree(
-//   recipe: RecipeModel,
-//   worker: Worker
-// ): TaskNode {
-//   const reqs = (recipe.components ?? []).map((options) => options[0])
-//   const children: TaskNode[] = []
-
-//   for (const req of reqs) {
-//     const _recipe = RECIPES[req.tag]
-//     let debtAmount = req.amount
-//     while (debtAmount > 0) {
-//       let task: TaskNode
-//       // Worker already has a good -> reserve it.
-//       if (worker.inventory.has(_recipe.tag, debtAmount)) {
-//         const reserved = worker.inventory.unstore({
-//           tag: _recipe.tag,
-//           amount: debtAmount,
-//         })
-//         task = new TaskNode(new ReserveTask(reserved), worker, [])
-//         task.debt = reserved
-//         debtAmount = 0
-//       }
-//       // Otherwise, produce it.
-//       else {
-//         task = createProdTaskTree(_recipe, worker)
-//         const _debt = Math.min(debtAmount, _recipe.yield)
-//         task.debt = { tag: _recipe.tag, amount: _debt }
-//         debtAmount -= _debt
-//       }
-//       children.push(task)
-//     }
-//   }
-//   const task = createProdTaskNode(recipe, worker, reqs)
-//   children.forEach((child, i) => {
-//     task.addChild(child)
-//     child.parent = task
-//   })
-//   return task
-// }
-
-// function createProdTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
-//   const task = new GenericProductionTask(recipe.manhours, {
-//     tag: GOODS[recipe.tag],
-//     amount: recipe.yield,
-//   })
-//   return new TaskNode(task, worker, reqs)
-// }
-
 export const GOODS = {
   WEAPON: 'WEAPON',
   MEAT: 'MEAT',
@@ -250,13 +144,6 @@ export const GOODS = {
   HIDE: 'HIDE',
   CLOTH: 'CLOTH',
 } as const
-
-// export const NEED_TO_GOODS: Record<NeedTag, ReadonlyArray<GoodTag>> = {
-//   [NEEDS.FOOD]: [GOODS.MEAL],
-//   [NEEDS.CLOTH]: [GOODS.CLOTH],
-//   [NEEDS.HOUSE]: [GOODS.HOUSE],
-//   [NEEDS.SEX]: [],
-// } as const
 
 export type GoodTag = (typeof GOODS)[keyof typeof GOODS]
 

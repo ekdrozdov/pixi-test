@@ -1,5 +1,10 @@
 import { AnimalSource, Bunny, TreeSource } from './game/agent'
-import { DumbCustomer, DumbMarket, DumbProducer } from './game/market'
+import {
+  DumbCustomer,
+  DumbMarket,
+  DumbProducer,
+  MarketBase,
+} from './game/market'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 import { MenuRegistryBase, SpawnerSelector } from './ui/menu'
@@ -9,7 +14,10 @@ const renderer = new PixiRenderer()
 const registry = new MenuRegistryBase()
 renderer.render(world, registry)
 registry.register(new SpawnerSelector(renderer, world.scene))
+const market = new MarketBase()
 const bunny = new Bunny()
+bunny.skill['ANIMAL'] = 1
+bunny.market = market
 bunny.renderable.position = { x: world.size.x / 2, y: world.size.y / 2 }
 const huntingSource = new AnimalSource()
 huntingSource.renderable.position = {
@@ -27,16 +35,16 @@ world.scene.mount(treeSource)
 world.clock.setFreq(100)
 world.clock.resume()
 
-const market = new DumbMarket()
-const base = 100
-new DumbProducer(market, 5500)
-let count = 100
-while (count > 0) {
-  Array.from(Array(count).keys()).map(
-    (_, i) => new DumbCustomer(market, base + i * 10, 1)
-  )
-  count--
-}
+// const market = new DumbMarket()
+// const base = 100
+// new DumbProducer(market, 5500)
+// let count = 100
+// while (count > 0) {
+//   Array.from(Array(count).keys()).map(
+//     (_, i) => new DumbCustomer(market, base + i * 10, 1)
+//   )
+//   count--
+// }
 
 export function getWorld() {
   return world

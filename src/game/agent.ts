@@ -9,14 +9,16 @@ import {
   GoodsContainerBase,
   RECIPES,
   Task,
-  Worker,
+  WorkerController,
 } from './goods-production/recieps'
 import { NeedsChain, NeedsChainBase, NeedsSubject } from './needs'
 import {
+  EstimationContext,
   ReqsTreeNode,
   buildRequirementsTreeFor,
   evalBestTask,
 } from './goods-production/aquisition'
+import { Market } from './market'
 
 export class Tree extends SceneObjectBase {
   constructor() {
@@ -88,6 +90,7 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
   die(): void {
     this.isAlive = false
     this.renderable.state = 'dead'
+    console.log('dead')
   }
   override onMount(world: World): void {
     this._world = world
@@ -108,19 +111,25 @@ export class BiologicalBase extends SceneObjectBase implements Biological {
 
 export class AnimalAgentBase
   extends BiologicalBase
-  implements Animal, NeedsSubject
+  implements Animal, NeedsSubject, WorkerController, EstimationContext
 {
   object: SceneObject
   speed: number
   private _moveTarget?: Point
-  private needsCentricTasks = new Map<GoodTag, Task[]>()
-  private needs: NeedsChain = new NeedsChainBase(this)
   assets: GoodsContainer = new GoodsContainerBase()
+  projects: Partial<Record<GoodTag, number>> = {}
+  manager: NeedsDrivenTaskManager
+  skill: Partial<Record<GoodTag, number | undefined>> = {}
+  market?: Market
 
   constructor(model?: Partial<AnimalModel>) {
     super(model)
     this.object = new SceneObjectBase()
     this.speed = model?.speed ?? 5
+    this.manager = new NeedsDrivenTaskManagerBase(this, this)
+  }
+  onFinished(): void {
+    this.manager.fulfillNextNeed()
   }
 
   onStarve(): void {
@@ -144,8 +153,6 @@ export class AnimalAgentBase
     this.state = 'idle'
   }
 
-  private activeTask?: Task
-
   override onMount(world: World): void {
     super.onMount(world)
     // movement executor
@@ -167,89 +174,30 @@ export class AnimalAgentBase
       })
     )
     // random movement ai executor
-    this.register(
-      world.clock.on('tick', () => {
-        if (this.state !== 'idle') return
-        if (!this.renderable.position) return
-        const moveChance = 0.05
-        if (Math.random() > moveChance) return
-        const moveBoxLimit = 300
-        const point: Point = {
-          x:
-            Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
-            this.renderable.position.x,
-          y:
-            Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
-            this.renderable.position.y,
-        }
-        this.move(point)
-      })
-    )
-    // fulfill needs
-    this.register(
-      world.clock.on('hour', () => {
-        if (this.activeTask) return
-        const need = this.needs.getNeed()
-        // No needs -> chill like an animal.
-        if (need === undefined) return
-
-        const poll = () => {
-          if (!queue) throw new Error('Missing queue')
-          const task = queue[0]
-          if (task !== undefined) {
-            task.execute(worker)
-            this.activeTask = task
-            return
-          }
-          this.activeTask = undefined
-        }
-
-        const worker: Worker = {
-          inventory: this.assets,
-          move: (point) => this.move(point),
-          hold: (point) => this.hold(point),
-          stop: () => this.stop(),
-          schedule: (task) => {
-            if (!queue) throw new Error('Missing queue')
-            queue.push(task)
-          },
-          onFinished: () => {
-            if (!queue) throw new Error('Missing queue')
-            // If task is finished, remove it from queue.
-            queue.shift()
-            poll()
-          },
-        }
-
-        // Find a way to fulfill a need and schedule tasks.
-        let queue = this.needsCentricTasks.get(need)
-        // Already has scheduled tasks -> do it.
-        if (queue !== undefined && queue.length !== 0) {
-          // console.log('Found unfinished task, continue')
-          poll()
-          return
-        }
-        queue = []
-        this.needsCentricTasks.set(need, queue)
-        // Or create it:
-        // find suitable recipe and schedule task tree.
-        // console.log('Lookup recipe and start it')
-        const targetRecipe = RECIPES[need]
-        // createProdTaskTree(targetRecipe, worker).schedule(worker)
-        const reqTree = buildRequirementsTreeFor(targetRecipe.tag)
-        evalBestTask(reqTree, this)
-        poll()
-      })
-    )
-    // reset needs
+    // this.register(
+    //   world.clock.on('tick', () => {
+    //     if (this.state !== 'idle') return
+    //     if (!this.renderable.position) return
+    //     const moveChance = 0.05
+    //     if (Math.random() > moveChance) return
+    //     const moveBoxLimit = 300
+    //     const point: Point = {
+    //       x:
+    //         Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
+    //         this.renderable.position.x,
+    //       y:
+    //         Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
+    //         this.renderable.position.y,
+    //     }
+    //     this.move(point)
+    //   })
+    // )
     this.register(
       world.clock.on('month', () => {
-        // console.log('Reset needs chain')
-        this.needs.reset()
-        this.activeTask?.pause()
-        this.activeTask = undefined
+        this.manager.reset()
       })
     )
+    this.manager.fulfillNextNeed()
   }
 }
 
@@ -262,14 +210,25 @@ export class Bunny extends AnimalAgentBase {
   }
 }
 
-class NeedsDrivenWorker {
-  readonly assets: GoodsContainer = new GoodsContainerBase()
-  private readonly tasks = new Map<GoodTag, Task[]>()
-  private readonly needs: NeedsChain = new NeedsChainBase(this)
+interface NeedsDrivenTaskManager {
+  reset(): void
+  fulfillNextNeed(): void
+}
+
+class NeedsDrivenTaskManagerBase {
+  private readonly needs: NeedsChain
   private currentTask?: Task
+
+  constructor(
+    readonly controller: WorkerController,
+    readonly context: EstimationContext
+  ) {
+    this.needs = new NeedsChainBase(this.controller)
+  }
+
   reset() {
     this.needs.reset()
-    this.currentTask?.pause()
+    this.currentTask?.cancel()
     this.currentTask = undefined
     this.fulfillNextNeed()
   }
@@ -277,27 +236,9 @@ class NeedsDrivenWorker {
   fulfillNextNeed() {
     const need = this.needs.getNeed()
     if (!need) return
-
-    const task = this.tasks.get(need)
-    if (task && task.length > 0) {
-      this.execute(task[0])
-      return
-    }
-
     const recipe = RECIPES[need]
     const reqTree = buildRequirementsTreeFor(recipe.tag)
-    const newTask = evalBestTask(reqTree, this)
-    this.execute(newTask)
-  }
-
-  onStarve() {}
-
-  onFinished() {
-    this.fulfillNextNeed()
-  }
-
-  private execute(task: Task) {
-    this.currentTask = task
-    task.execute(this)
+    this.currentTask = evalBestTask(reqTree, this.context)
+    this.currentTask.execute(this.controller)
   }
 }

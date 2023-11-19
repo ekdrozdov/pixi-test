@@ -34,7 +34,6 @@ export interface NeedsSubject {
 
 function getMonthlyFoodAmount(): number {
   return 2 * 30
-  // return 10
 }
 
 export class NeedsChainBase implements NeedsChain {

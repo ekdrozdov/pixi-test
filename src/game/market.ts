@@ -11,7 +11,7 @@ export interface Market {
   getPricesFor(good: GoodTag): Good[]
 }
 
-class MarketBase implements Market {
+export class MarketBase implements Market {
   prices = new Map<GoodTag, PriceTracker[]>()
   register(): Lot {
     return {
@@ -20,6 +20,7 @@ class MarketBase implements Market {
     }
   }
   getPricesFor(good: GoodTag): Good[] {
+    return []
     throw new Error('Method not implemented.')
   }
 }
