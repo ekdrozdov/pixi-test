@@ -28,7 +28,7 @@ export interface NeedsChain {
 }
 
 export interface NeedsSubject {
-  readonly inventory: GoodsContainer
+  readonly assets: GoodsContainer
   onStarve(): void
 }
 
@@ -57,21 +57,21 @@ export class NeedsChainBase implements NeedsChain {
     this.generator = this.needsGen()
   }
   private *needsGen() {
-    const food = this.subj.inventory.unstore({
+    const food = this.subj.assets.unstore({
       tag: 'MEAL',
       amount: this.foodToEat,
     })
     this.foodToEat -= food.amount
     // console.log(`food left this month: ${this.foodToEat}`)
     while (this.foodToEat > 0) {
-      const food = this.subj.inventory.unstore({
+      const food = this.subj.assets.unstore({
         tag: 'MEAL',
         amount: this.foodToEat,
       })
       this.foodToEat -= food.amount
       yield GOODS.MEAL
     }
-    if (!this.subj.inventory.has(GOODS.HOUSE)) yield GOODS.HOUSE
-    if (!this.subj.inventory.has(GOODS.CLOTH)) yield GOODS.CLOTH
+    if (!this.subj.assets.has(GOODS.HOUSE)) yield GOODS.HOUSE
+    if (!this.subj.assets.has(GOODS.CLOTH)) yield GOODS.CLOTH
   }
 }

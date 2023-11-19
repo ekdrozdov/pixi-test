@@ -1,6 +1,7 @@
 import { getWorld } from '../../main'
 import { Disposable } from '../../utils/lifecycle'
 import { Movable, Source } from '../agent'
+import { Market } from '../market'
 
 export interface GoodsContainer {
   store(good: Good): void
@@ -43,6 +44,7 @@ export class GoodsContainerBase implements GoodsContainer {
 
 export interface Worker extends Movable {
   readonly inventory: GoodsContainer
+  readonly projects: Record<GoodTag, number>
   schedule(task: Task): void
   onFinished(): void
 }
@@ -55,61 +57,61 @@ export interface Task {
   pause(): void
 }
 
-class TaskNode implements Task {
-  private children?: TaskNode[]
-  parent?: TaskNode
-  debt?: Good
-  constructor(
-    private readonly task: Task,
-    private readonly worker: Worker,
-    private readonly reqs: Good[]
-  ) {}
+// class TaskNode implements Task {
+//   private children?: TaskNode[]
+//   parent?: TaskNode
+//   debt?: Good
+//   constructor(
+//     private readonly task: Task,
+//     private readonly worker: Worker,
+//     private readonly reqs: Good[]
+//   ) {}
 
-  schedule(worker: Worker) {
-    if (!this.children) {
-      worker.schedule(this)
-      return
-    }
-    this.children.forEach((child) => child.schedule(worker))
-  }
+//   schedule(worker: Worker) {
+//     if (!this.children) {
+//       worker.schedule(this)
+//       return
+//     }
+//     this.children.forEach((child) => child.schedule(worker))
+//   }
 
-  pause(): void {
-    this.task.pause()
-  }
+//   pause(): void {
+//     this.task.pause()
+//   }
 
-  supply(good: Good) {
-    this.reqs.splice(0, 1)
-    if (this.reqs.length === 0) {
-      this.worker.schedule(this)
-    }
-  }
+//   supply(good: Good) {
+//     this.reqs.splice(0, 1)
+//     if (this.reqs.length === 0) {
+//       this.worker.schedule(this)
+//     }
+//   }
 
-  addChild(node: TaskNode) {
-    if (!this.children) this.children = []
-    this.children.push(node)
-  }
+//   addChild(node: TaskNode) {
+//     if (!this.children) this.children = []
+//     this.children.push(node)
+//   }
 
-  execute(): void {
-    this.task.execute({
-      inventory: this.worker.inventory,
-      move: (point) => this.worker.move(point),
-      hold: (point) => this.worker.hold(point),
-      stop: () => this.worker.stop(),
-      schedule: (task: Task) => this.worker.schedule(task),
-      onFinished: () => {
-        if (!this.parent) {
-          this.worker.onFinished()
-          return
-        }
-        if (!this.debt) throw new Error('Missing debt')
-        const good = this.worker.inventory.unstore(this.debt)
-        if (good.amount < this.debt.amount) throw new Error('Missing goods')
-        this.parent.supply(good)
-        this.worker.onFinished()
-      },
-    })
-  }
-}
+//   execute(): void {
+//     this.task.execute({
+//       inventory: this.worker.inventory,
+//       move: (point) => this.worker.move(point),
+//       hold: (point) => this.worker.hold(point),
+//       stop: () => this.worker.stop(),
+//       schedule: (task: Task) => this.worker.schedule(task),
+//       onFinished: () => {
+//         if (!this.parent) {
+//           this.worker.onFinished()
+//           return
+//         }
+//         if (!this.debt) throw new Error('Missing debt')
+//         const good = this.worker.inventory.unstore(this.debt)
+//         if (good.amount < this.debt.amount) throw new Error('Missing goods')
+//         this.parent.supply(good)
+//         this.worker.onFinished()
+//       },
+//     })
+//   }
+// }
 
 class ReserveTask implements Task {
   constructor(private readonly reserved: Good) {}
@@ -120,16 +122,29 @@ class ReserveTask implements Task {
   pause(): void {}
 }
 
+export class BuyTask implements Task {
+  constructor(private market: Market, good: Good) {}
+  execute(worker: Worker): void {
+    throw new Error()
+  }
+  pause(): void {}
+}
+
 /**
  * Go to workplace and work for N hours.
  */
-class GenericProductionTask implements Task {
-  tracker?: Disposable
-  constructor(private hoursLeft: number, private reward: Good) {
-    if (this.hoursLeft <= 0) throw new RangeError()
-  }
+export class GenericProductionTask implements Task {
+  private timer?: Disposable
+  constructor(private readonly hoursCost: number, private reward: Good) {}
   execute(worker: Worker): void {
-    this.tracker?.dispose()
+    this.timer?.dispose()
+    if (
+      worker.projects[this.reward.tag] === undefined ||
+      worker.projects[this.reward.tag] === 0
+    ) {
+      worker.projects[this.reward.tag] = this.hoursCost
+    }
+
     // TODO: rm clock from worker
     // TODO: get available spots from worker and move to nearest
     const spots = getWorld()
@@ -140,10 +155,10 @@ class GenericProductionTask implements Task {
       spot = spots[Math.floor(Math.random() * spots.length)]
       worker.move(spot.renderable.position!)
     }
-    this.tracker = getWorld().clock.on('hour', () => {
+    this.timer = getWorld().clock.on('hour', () => {
       spot && worker.move(spot.renderable.position!)
-      --this.hoursLeft
-      if (this.hoursLeft === 0) {
+      worker.projects[this.reward.tag]--
+      if (worker.projects[this.reward.tag] === 0) {
         worker.inventory.store(this.reward)
         this.pause()
         worker.onFinished()
@@ -151,8 +166,8 @@ class GenericProductionTask implements Task {
     })
   }
   pause(): void {
-    this.tracker?.dispose()
-    this.tracker = undefined
+    this.timer?.dispose()
+    this.timer = undefined
   }
 }
 
@@ -176,53 +191,53 @@ export interface RecipeModel {
 /**
  * Recursively creates task tree of production tasks for a recipe.
  */
-export function createProdTaskTree(
-  recipe: RecipeModel,
-  worker: Worker
-): TaskNode {
-  const reqs = (recipe.components ?? []).map((options) => options[0])
-  const children: TaskNode[] = []
+// export function createProdTaskTree(
+//   recipe: RecipeModel,
+//   worker: Worker
+// ): TaskNode {
+//   const reqs = (recipe.components ?? []).map((options) => options[0])
+//   const children: TaskNode[] = []
 
-  for (const req of reqs) {
-    const _recipe = RECIPES[req.tag]
-    let debtAmount = req.amount
-    while (debtAmount > 0) {
-      let task: TaskNode
-      // Worker already has a good -> reserve it.
-      if (worker.inventory.has(_recipe.tag, debtAmount)) {
-        const reserved = worker.inventory.unstore({
-          tag: _recipe.tag,
-          amount: debtAmount,
-        })
-        task = new TaskNode(new ReserveTask(reserved), worker, [])
-        task.debt = reserved
-        debtAmount = 0
-      }
-      // Otherwise, produce it.
-      else {
-        task = createProdTaskTree(_recipe, worker)
-        const _debt = Math.min(debtAmount, _recipe.yield)
-        task.debt = { tag: _recipe.tag, amount: _debt }
-        debtAmount -= _debt
-      }
-      children.push(task)
-    }
-  }
-  const task = createProdTaskNode(recipe, worker, reqs)
-  children.forEach((child, i) => {
-    task.addChild(child)
-    child.parent = task
-  })
-  return task
-}
+//   for (const req of reqs) {
+//     const _recipe = RECIPES[req.tag]
+//     let debtAmount = req.amount
+//     while (debtAmount > 0) {
+//       let task: TaskNode
+//       // Worker already has a good -> reserve it.
+//       if (worker.inventory.has(_recipe.tag, debtAmount)) {
+//         const reserved = worker.inventory.unstore({
+//           tag: _recipe.tag,
+//           amount: debtAmount,
+//         })
+//         task = new TaskNode(new ReserveTask(reserved), worker, [])
+//         task.debt = reserved
+//         debtAmount = 0
+//       }
+//       // Otherwise, produce it.
+//       else {
+//         task = createProdTaskTree(_recipe, worker)
+//         const _debt = Math.min(debtAmount, _recipe.yield)
+//         task.debt = { tag: _recipe.tag, amount: _debt }
+//         debtAmount -= _debt
+//       }
+//       children.push(task)
+//     }
+//   }
+//   const task = createProdTaskNode(recipe, worker, reqs)
+//   children.forEach((child, i) => {
+//     task.addChild(child)
+//     child.parent = task
+//   })
+//   return task
+// }
 
-function createProdTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
-  const task = new GenericProductionTask(recipe.manhours, {
-    tag: GOODS[recipe.tag],
-    amount: recipe.yield,
-  })
-  return new TaskNode(task, worker, reqs)
-}
+// function createProdTaskNode(recipe: RecipeModel, worker: Worker, reqs: Good[]) {
+//   const task = new GenericProductionTask(recipe.manhours, {
+//     tag: GOODS[recipe.tag],
+//     amount: recipe.yield,
+//   })
+//   return new TaskNode(task, worker, reqs)
+// }
 
 export const GOODS = {
   WEAPON: 'WEAPON',

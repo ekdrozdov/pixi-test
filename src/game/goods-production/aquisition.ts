@@ -10,9 +10,17 @@
  */
 
 import { Market } from '../market'
-import { Good, GoodTag, GoodsContainer, RECIPES } from './recieps'
+import {
+  BuyTask,
+  GenericProductionTask,
+  Good,
+  GoodTag,
+  GoodsContainer,
+  RECIPES,
+  Task,
+} from './recieps'
 
-interface ReqsTreeNode extends Good {
+export interface ReqsTreeNode extends Good {
   children?: ReqsTreeNode[]
 }
 
@@ -98,4 +106,38 @@ function estimateBuy(
   const prices = context.market.getPricesFor(good.tag)
   // Try to find best deal by prices vs weighted inventory.
   return undefined
+}
+
+// TODO: check who is responsible to pay task setup fee.
+export function evalBestTask(
+  node: ReqsTreeNode,
+  context: EstimationContext
+): Task {
+  const action = evalBestAction(node, context)
+  const recipe = RECIPES[node.tag]
+
+  switch (action) {
+    case 'unavailable':
+      throw new Error('Unavailable')
+    case 'produce':
+      // Dfs unfulfilled node.
+      for (const child of node.children ?? []) {
+        if (!context.inventory.has(node.tag, node.amount)) {
+          return evalBestTask(child, context)
+        }
+      }
+      // All children are fulfilled -> produce.
+      return new GenericProductionTask(recipe.manhours, {
+        tag: recipe.tag,
+        amount: recipe.yield,
+      })
+    case 'buy':
+      return new BuyTask(context.market, {
+        tag: recipe.tag,
+        amount: recipe.yield,
+      })
+    default:
+      const e: never = action
+      throw new RangeError(e)
+  }
 }

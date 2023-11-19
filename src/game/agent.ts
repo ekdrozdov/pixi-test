@@ -10,9 +10,13 @@ import {
   RECIPES,
   Task,
   Worker,
-  createProdTaskTree,
 } from './goods-production/recieps'
 import { NeedsChain, NeedsChainBase, NeedsSubject } from './needs'
+import {
+  ReqsTreeNode,
+  buildRequirementsTreeFor,
+  evalBestTask,
+} from './goods-production/aquisition'
 
 export class Tree extends SceneObjectBase {
   constructor() {
@@ -111,7 +115,7 @@ export class AnimalAgentBase
   private _moveTarget?: Point
   private needsCentricTasks = new Map<GoodTag, Task[]>()
   private needs: NeedsChain = new NeedsChainBase(this)
-  inventory: GoodsContainer = new GoodsContainerBase()
+  assets: GoodsContainer = new GoodsContainerBase()
 
   constructor(model?: Partial<AnimalModel>) {
     super(model)
@@ -186,7 +190,6 @@ export class AnimalAgentBase
       world.clock.on('hour', () => {
         if (this.activeTask) return
         const need = this.needs.getNeed()
-        // console.log(`Doing ${need}`)
         // No needs -> chill like an animal.
         if (need === undefined) return
 
@@ -202,7 +205,7 @@ export class AnimalAgentBase
         }
 
         const worker: Worker = {
-          inventory: this.inventory,
+          inventory: this.assets,
           move: (point) => this.move(point),
           hold: (point) => this.hold(point),
           stop: () => this.stop(),
@@ -232,7 +235,9 @@ export class AnimalAgentBase
         // find suitable recipe and schedule task tree.
         // console.log('Lookup recipe and start it')
         const targetRecipe = RECIPES[need]
-        createProdTaskTree(targetRecipe, worker).schedule(worker)
+        // createProdTaskTree(targetRecipe, worker).schedule(worker)
+        const reqTree = buildRequirementsTreeFor(targetRecipe.tag)
+        evalBestTask(reqTree, this)
         poll()
       })
     )
@@ -254,5 +259,45 @@ export class Bunny extends AnimalAgentBase {
       health: 10,
     })
     this.renderable.kind = 'bunny'
+  }
+}
+
+class NeedsDrivenWorker {
+  readonly assets: GoodsContainer = new GoodsContainerBase()
+  private readonly tasks = new Map<GoodTag, Task[]>()
+  private readonly needs: NeedsChain = new NeedsChainBase(this)
+  private currentTask?: Task
+  reset() {
+    this.needs.reset()
+    this.currentTask?.pause()
+    this.currentTask = undefined
+    this.fulfillNextNeed()
+  }
+
+  fulfillNextNeed() {
+    const need = this.needs.getNeed()
+    if (!need) return
+
+    const task = this.tasks.get(need)
+    if (task && task.length > 0) {
+      this.execute(task[0])
+      return
+    }
+
+    const recipe = RECIPES[need]
+    const reqTree = buildRequirementsTreeFor(recipe.tag)
+    const newTask = evalBestTask(reqTree, this)
+    this.execute(newTask)
+  }
+
+  onStarve() {}
+
+  onFinished() {
+    this.fulfillNextNeed()
+  }
+
+  private execute(task: Task) {
+    this.currentTask = task
+    task.execute(this)
   }
 }
