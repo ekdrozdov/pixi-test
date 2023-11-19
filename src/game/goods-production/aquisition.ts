@@ -27,16 +27,16 @@ export interface ReqsTreeNode extends Good {
 // Actually, a tree could be prefabricated and reused.
 export function buildRequirementsTreeFor(tag: GoodTag): ReqsTreeNode {
   const root: ReqsTreeNode = { tag, amount: 1 }
-  root.children = buildChildrenOf(root)
+  buildChildrenOf(root)
   return root
 }
 
-function buildChildrenOf(node: ReqsTreeNode): ReqsTreeNode[] | undefined {
+function buildChildrenOf(node: ReqsTreeNode): undefined {
   const recipe = RECIPES[node.tag]
   const components = recipe.components
   if (components === undefined) return
 
-  const children = []
+  node.children = []
   for (const componentOptions of components) {
     // Just pick a first option for now.
     const option = componentOptions[0]
@@ -45,9 +45,8 @@ function buildChildrenOf(node: ReqsTreeNode): ReqsTreeNode[] | undefined {
       amount: option.amount,
     }
     buildChildrenOf(reqNode)
-    children.push(reqNode)
+    node.children.push(reqNode)
   }
-  return children
 }
 
 export interface EstimationContext {
@@ -126,7 +125,7 @@ export function evalBestTask(
     case 'produce':
       // Dfs unfulfilled node.
       for (const child of node.children ?? []) {
-        if (!context.assets.has(node.tag, node.amount)) {
+        if (!context.assets.has(child.tag, child.amount)) {
           return evalBestTask(child, context)
         }
       }

@@ -70,7 +70,7 @@ export class NeedsChainBase implements NeedsChain {
       this.foodToEat -= food.amount
       yield GOODS.MEAL
     }
-    if (!this.subj.assets.has(GOODS.HOUSE)) yield GOODS.HOUSE
-    if (!this.subj.assets.has(GOODS.CLOTH)) yield GOODS.CLOTH
+    while (!this.subj.assets.has(GOODS.HOUSE)) yield GOODS.HOUSE
+    while (!this.subj.assets.has(GOODS.CLOTH)) yield GOODS.CLOTH
   }
 }
