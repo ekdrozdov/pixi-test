@@ -92,7 +92,6 @@ export class GenericProductionTask implements Task {
       worker.projects[this.reward.tag] = this.hoursCost
     }
 
-    // TODO: rm clock from worker
     // TODO: get available spots from worker and move to nearest
     const spots = getWorld()
       .scene.all(Source)

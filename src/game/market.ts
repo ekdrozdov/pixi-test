@@ -1,4 +1,8 @@
 import { getWorld } from '../main'
+import {
+  buildRequirementsTreeFor,
+  estimateBaselineProductionCost as estimateBaseProductionCost,
+} from './goods-production/aquisition'
 import { Good, GoodTag } from './goods-production/recieps'
 
 interface Lot {
@@ -8,20 +12,50 @@ interface Lot {
 
 export interface Market {
   register(): Lot
-  getPricesFor(good: GoodTag): Good[]
+  getPricesFor(tag: GoodTag): Good[]
 }
 
 export class MarketBase implements Market {
-  prices = new Map<GoodTag, PriceTracker[]>()
+  private readonly prices = new Map<GoodTag, Map<GoodTag, PriceTracker>>()
   register(): Lot {
     return {
-      sell: (offer: Good, want: GoodTag) => {},
-      buy: (want: Good, offer: GoodTag) => {},
+      sell: (offer: Good, want: GoodTag) => {
+        this.getTracker(offer.tag, want).supply(offer.amount)
+      },
+      buy: (want: Good, offer: GoodTag) => {
+        this.getTracker(want.tag, offer).demand(want.amount)
+      },
     }
   }
-  getPricesFor(good: GoodTag): Good[] {
+  getPricesFor(tag: GoodTag): Good[] {
+    // Hit stored tag -> just return prices
+    const prices = this.prices.get(tag)
+    // Not hit stored tag -> prices are stored implicitly, build priceslist.
+    if (prices === undefined) return []
+    // this.prices
     return []
     throw new Error('Method not implemented.')
+  }
+
+  private getTracker(one: GoodTag, another: GoodTag): PriceTracker {
+    // Store trackers only for the lowest key.
+    const lowest = one < another ? one : another
+    const highest = one < another ? another : one
+    const priceMap = this.prices.get(lowest)
+    if (priceMap === undefined) {
+      const map = new Map<GoodTag, PriceTracker>()
+      const tracker = new PriceTrackerBase(lowest, highest)
+      map.set(highest, tracker)
+      this.prices.set(lowest, map)
+      return tracker
+    }
+    const tracker = priceMap.get(highest)
+    if (tracker === undefined) {
+      const tracker = new PriceTrackerBase(lowest, highest)
+      priceMap.set(highest, tracker)
+      return tracker
+    }
+    return tracker
   }
 }
 
@@ -29,71 +63,39 @@ interface PriceTracker {
   readonly price: number
   supply(amount: number): void
   demand(amount: number): void
-  reset(): void
+  updatePrice(): void
 }
 
-class PriceTrackerBase {
-  constructor(lhs: GoodTag, rhs: GoodTag) {
-    // find labor costs -> baseline costs
-  }
-}
-
-/**
- * Price inflate
- *  demand is more than supply
- * Price deflation
- *  demand is less than supply
- * Production up
- *  product price is more than baseline
- * Production down
- *  product price is less than baseline
- */
-
-export class DumbMarket {
-  basePrice = 100
-  price = 100
-  demandCount = 1
-  supplyCount = 1
-  cries = 0
-  constructor() {
-    getWorld().clock.on('day', () => {
-      this.price = Math.max(
-        Math.floor(this.basePrice * (this.demandCount / this.supplyCount)),
-        Math.floor(this.basePrice * 0.2)
-      )
-      console.log(`price: ${this.price}, potential: ${this.cries}`)
-      this.demandCount = 0
-      this.supplyCount = 0
-      this.cries = 0
-    })
+class PriceTrackerBase implements PriceTracker {
+  // Represents how many sellees is buyee costs.
+  price: number
+  private readonly basePrice: number
+  private _supply = 0
+  private _demand = 0
+  constructor(buyee: GoodTag, sellee: GoodTag) {
+    const buyeeBaseCost = estimateBaseProductionCost(
+      buildRequirementsTreeFor(buyee)
+    )
+    const selleeBaseCost = estimateBaseProductionCost(
+      buildRequirementsTreeFor(sellee)
+    )
+    this.basePrice = buyeeBaseCost / selleeBaseCost
+    this.price = this.basePrice
   }
   supply(amount: number): void {
-    this.supplyCount += amount
+    this._supply += amount
   }
-  demand(amount: number) {
-    this.demandCount += amount
+  demand(amount: number): void {
+    this._demand += amount
   }
-  cry(amount: number) {
-    this.cries += amount
-  }
-}
-
-export class DumbCustomer {
-  constructor(market: DumbMarket, budgetPerItem: number, toBuy: number) {
-    getWorld().clock.on('day', () => {
-      if (market.price <= budgetPerItem) {
-        market.demand(toBuy)
-      } else {
-        market.cry(toBuy)
-      }
-    })
-  }
-}
-
-export class DumbProducer {
-  constructor(market: DumbMarket, toSell: number) {
-    getWorld().clock.on('day', () => {
-      market.supply(toSell)
-    })
+  updatePrice(): void {
+    // TODO: consider division by 0.
+    if (this._supply !== 0 && this._demand !== 0) {
+      this.price = this.price * (this._demand / this._supply)
+    }
+    const minPricePercent = 0.3
+    this.price = Math.max(this.price, this.basePrice * minPricePercent)
+    this._supply = 0
+    this._demand = 0
   }
 }

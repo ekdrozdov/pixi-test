@@ -86,6 +86,7 @@ function estimateBestCost(
   return Math.min(productionCost, buyCost)
 }
 
+// TODO: consider it estimates to produce ONE required good, but estimate to buy ALL required goods.
 function estimateProduce(
   good: ReqsTreeNode,
   context: EstimationContext
@@ -104,12 +105,25 @@ function estimateProduce(
   return cost
 }
 
+export function estimateBaselineProductionCost(good: ReqsTreeNode): number {
+  const recipe = RECIPES[good.tag]
+  let cost = recipe.manhours
+  if (good.children === undefined) return cost
+  for (const child of good.children) {
+    cost += estimateBaselineProductionCost(child)
+  }
+  return cost
+}
+
 function estimateBuy(
-  good: Good,
+  target: Good,
   context: EstimationContext
 ): number | undefined {
   if (context.market === undefined) return undefined
-  const prices = context.market.getPricesFor(good.tag)
+  const prices = context.market.getPricesFor(target.tag)
+  // price = 10 -> must pay 10 your goods to buy 1 target good.
+  // price = 0.1 -> must pay 1 your good to buy 10 target goods.
+  // return target.amount * price
   // Try to find best deal by prices vs weighted inventory.
   return undefined
 }

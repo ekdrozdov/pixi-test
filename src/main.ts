@@ -1,10 +1,5 @@
 import { AnimalSource, Bunny, TreeSource } from './game/agent'
-import {
-  DumbCustomer,
-  DumbMarket,
-  DumbProducer,
-  MarketBase,
-} from './game/market'
+import { MarketBase } from './game/market'
 import { WorldBase } from './game/world'
 import { PixiRenderer } from './renderer/pixi/pixiRenderer'
 import { MenuRegistryBase, SpawnerSelector } from './ui/menu'
