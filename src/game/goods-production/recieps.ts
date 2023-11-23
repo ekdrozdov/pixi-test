@@ -79,13 +79,16 @@ export class BuyTask implements Task {
  */
 export class GenericProductionTask implements Task {
   private timer?: Disposable
-  constructor(private readonly hoursCost: number, private reward: Good) {}
+  constructor(
+    private readonly hoursCost: number,
+    private readonly reward: Good,
+    private readonly reqs: Good[]
+  ) {}
   execute(worker: WorkerController): void {
     this.timer?.dispose()
-    if (
-      worker.projects[this.reward.tag] === undefined ||
-      worker.projects[this.reward.tag] === 0
-    ) {
+    // Project not started -> pay setup fee and init time tracker.
+    if (worker.projects[this.reward.tag] === undefined) {
+      this.reqs.forEach((req) => worker.assets.unstore(req))
       worker.projects[this.reward.tag] = this.hoursCost
     }
 
@@ -104,6 +107,7 @@ export class GenericProductionTask implements Task {
       // TODO: guess better to check it.
       worker.projects[this.reward.tag]!--
       if (worker.projects[this.reward.tag] === 0) {
+        worker.projects[this.reward.tag] = undefined
         worker.assets.store(this.reward)
         this.cancel()
         worker.onFinished()
@@ -173,12 +177,12 @@ export const RECIPES: Record<GoodTag, RecipeModel> = {
   },
   TREE: {
     tag: GOODS.TREE,
-    manhours: 4,
+    manhours: 24,
     yield: 1,
   },
   HOUSE: {
     tag: GOODS.HOUSE,
-    manhours: 16,
+    manhours: 400,
     yield: 1,
     components: [[{ tag: GOODS.TREE, amount: 16 }]],
   },

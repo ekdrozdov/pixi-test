@@ -51,6 +51,7 @@ function buildChildrenOf(node: ReqsTreeNode): undefined {
 
 export interface EstimationContext {
   readonly skill: Partial<Record<GoodTag, number | undefined>>
+  readonly projects: Partial<Record<GoodTag, number>>
   readonly assets: GoodsContainer
   readonly market?: Market
 }
@@ -90,6 +91,8 @@ function estimateProduce(
   context: EstimationContext
 ): number | undefined {
   const recipe = RECIPES[good.tag]
+  if (context.projects[good.tag] !== undefined)
+    return context.projects[good.tag]
   // Assume agent has tech knowledge and skill of level 1.
   let cost = Math.ceil((recipe.manhours / recipe.yield) * good.amount)
   if (good.children === undefined) return cost
@@ -111,7 +114,6 @@ function estimateBuy(
   return undefined
 }
 
-// TODO: check who is responsible to pay task setup fee.
 export function evalBestTask(
   node: ReqsTreeNode,
   context: EstimationContext
@@ -123,6 +125,19 @@ export function evalBestTask(
     case 'unavailable':
       throw new Error('Unavailable')
     case 'produce':
+      const produceNodeTask = new GenericProductionTask(
+        recipe.manhours,
+        {
+          tag: recipe.tag,
+          amount: recipe.yield,
+        },
+        node.children ?? []
+      )
+
+      // Has project -> continue.
+      if (context.projects[node.tag] !== undefined) {
+        return produceNodeTask
+      }
       // Dfs unfulfilled node.
       for (const child of node.children ?? []) {
         if (!context.assets.has(child.tag, child.amount)) {
@@ -130,10 +145,7 @@ export function evalBestTask(
         }
       }
       // All children are fulfilled -> produce.
-      return new GenericProductionTask(recipe.manhours, {
-        tag: recipe.tag,
-        amount: recipe.yield,
-      })
+      return produceNodeTask
     case 'buy':
       if (context.market === undefined) throw new Error('Missing market')
       return new BuyTask(context.market, {
