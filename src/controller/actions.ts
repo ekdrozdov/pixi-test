@@ -1,4 +1,4 @@
-import { Renderable } from '../game/agent'
+import { Renderable } from '../game/agent/animal'
 import { SceneObject } from '../game/sceneObject'
 import { Point } from '../renderer/renderable'
 import { Scene } from '../game/scene'

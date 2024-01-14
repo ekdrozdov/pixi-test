@@ -1,51 +1,23 @@
-import { crop } from '../utils/math'
-import { Point } from '../renderer/renderable'
-import { SceneObject, SceneObjectBase } from './scene'
-import { World } from './world'
+import { crop } from '../../utils/math'
+import { Point } from '../../renderer/renderable'
+import { SceneObject, SceneObjectBase } from '../scene'
+import { World } from '../world'
 import {
-  GOODS,
   GoodTag,
   GoodsContainer,
   GoodsContainerBase,
   RECIPES,
   Task,
   WorkerController,
-} from './goods-production/recieps'
-import { NeedsChain, NeedsChainBase, NeedsSubject } from './needs'
+} from '../goods-production/recieps'
+import { NeedsChain, NeedsChainBase, NeedsSubject } from '../needs'
 import {
   EstimationContext,
   ReqsTreeNode,
   buildRequirementsTreeFor,
   evalBestTask,
-} from './goods-production/aquisition'
-import { Market } from './market'
-
-export class Tree extends SceneObjectBase {
-  constructor() {
-    super()
-    this.renderable.kind = 'tree'
-  }
-}
-
-export class Source extends SceneObjectBase {
-  constructor(public tag: GoodTag) {
-    super()
-  }
-}
-
-export class TreeSource extends Source {
-  constructor() {
-    super(GOODS.TREE)
-    this.renderable.kind = 'tree-source'
-  }
-}
-
-export class AnimalSource extends Source {
-  constructor() {
-    super(GOODS.ANIMAL)
-    this.renderable.kind = 'animal-source'
-  }
-}
+} from '../goods-production/aquisition'
+import { Market } from '../market'
 
 type BiologicalState = 'idle' | 'sleeping' | 'moving' | 'eating' | 'holding'
 
@@ -173,25 +145,6 @@ export class AnimalAgentBase
           this.state = 'idle'
       })
     )
-    // random movement ai executor
-    // this.register(
-    //   world.clock.on('tick', () => {
-    //     if (this.state !== 'idle') return
-    //     if (!this.renderable.position) return
-    //     const moveChance = 0.05
-    //     if (Math.random() > moveChance) return
-    //     const moveBoxLimit = 300
-    //     const point: Point = {
-    //       x:
-    //         Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
-    //         this.renderable.position.x,
-    //       y:
-    //         Math.floor(Math.random() * moveBoxLimit - moveBoxLimit / 2) +
-    //         this.renderable.position.y,
-    //     }
-    //     this.move(point)
-    //   })
-    // )
     this.register(
       world.clock.on('month', () => {
         this.manager.reset()
@@ -210,7 +163,7 @@ export class Bunny extends AnimalAgentBase {
   }
 }
 
-interface NeedsDrivenTaskManager {
+export interface NeedsDrivenTaskManager {
   reset(): void
   fulfillNextNeed(): void
 }

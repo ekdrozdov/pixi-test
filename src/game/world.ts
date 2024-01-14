@@ -19,3 +19,7 @@ export class WorldBase implements World {
     }
   }
 }
+
+export function estimateLocalFood(point: Point, radius: number): number {
+  return 10
+}

@@ -1,6 +1,7 @@
 import { getWorld } from '../../main'
 import { Disposable } from '../../utils/lifecycle'
-import { Movable, Source } from '../agent'
+import { Movable } from '../agent/animal'
+import { Source } from '../agent/objects'
 import { Market } from '../market'
 
 export interface GoodsContainer {

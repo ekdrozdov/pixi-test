@@ -1,4 +1,6 @@
-import { Bunny, TreeSource, Tree, AnimalSource } from '../game/agent'
+import { Bunny } from '../game/agent/animal'
+import { TreeSource, AnimalSource } from '../game/agent/objects'
+import { Tree } from '../game/agent/objects'
 import { Scene } from '../game/scene'
 import { RendererEvent } from '../renderer/renderer'
 import { Event, EventEmitter, EventEmitterBase } from '../utils/events'
